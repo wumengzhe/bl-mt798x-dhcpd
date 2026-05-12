@@ -78,6 +78,17 @@ jobs:
           sed -i "5s/UBOOT_DIR=.*/UBOOT_DIR=${{matrix.WRT_MTK}}/" ./wrt/build.sh
           sed -i "7s/ATF_DIR=.*/ATF_DIR=${{matrix.WRT_ATF}}/" ./wrt/build.sh
 
+          # 等待 build.sh 更新完成
+          sleep 2
+
+          # 查找特定版本的 uboot 目录并收集配置文件
+          UBOOT_DIR="./wrt/${{matrix.WRT_MTK}}"
+          if [ ! -d "$UBOOT_DIR" ]; then
+            echo "Error: U-Boot directory $UBOOT_DIR does not exist!"
+            ls -la ./wrt/
+            exit 1
+          fi
+
           # 收集 uboot 配置并生成 Uboots.txt
           declare -A lines_map
           while IFS= read -r f; do
@@ -89,7 +100,7 @@ jobs:
             else
               lines_map["$rest"]="SOC=$soc BOARD=$rest VERSION=2024 ./build.sh"
             fi
-          done < <(find ./wrt/uboot-mtk-*/configs -type f -name 'mt798*defconfig' | grep -iE 'mt798[16]_' | grep -ivE 'rfb|fpga')
+          done < <(find "$UBOOT_DIR/configs" -type f -name 'mt798*defconfig' | grep -iE 'mt798[16]_' | grep -ivE 'rfb|fpga')
 
           # 输出 Uboots.txt
           printf "%s\n" "${lines_map[@]}" | sort > ./Uboots.txt
