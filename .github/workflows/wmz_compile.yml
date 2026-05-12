@@ -73,12 +73,38 @@ jobs:
       - name: Update Build Script
         run: |
           # 修改 build.sh 中的 UBOOT_DIR 和 ATF_DIR
-          sed -i "5s/UBOOT_DIR=.*/UBOOT_DIR=${{matrix.WRT_MTK}}/" ./wrt/build.sh
-          sed -i "7s/ATF_DIR=.*/ATF_DIR=${{matrix.WRT_ATF}}/" ./wrt/build.sh
+          sed -i "s/UBOOT_DIR=.*/UBOOT_DIR=${{matrix.WRT_MTK}}/" ./wrt/build.sh
+          sed -i "s/ATF_DIR=.*/ATF_DIR=${{matrix.WRT_ATF}}/" ./wrt/build.sh
           
           # 验证修改
           echo "Updated build.sh:"
           grep -E "(UBOOT_DIR|ATF_DIR)" ./wrt/build.sh
+
+      - name: Verify Directories Exist
+        run: |
+          cd ./wrt/
+          
+          UBOOT_DIR="${{matrix.WRT_MTK}}"
+          ATF_DIR="${{matrix.WRT_ATF}}"
+          
+          echo "Checking directories..."
+          echo "UBOOT_DIR: $UBOOT_DIR exists: $(test -d $UBOOT_DIR && echo 'YES' || echo 'NO')"
+          echo "ATF_DIR: $ATF_DIR exists: $(test -d $ATF_DIR && echo 'YES' || echo 'NO')"
+          
+          if [ ! -d "$UBOOT_DIR" ]; then
+            echo "ERROR: UBOOT directory does not exist!"
+            ls -la
+            exit 1
+          fi
+          
+          if [ ! -d "$ATF_DIR" ]; then
+            echo "ERROR: ATF directory does not exist!"
+            ls -la
+            exit 1
+          fi
+          
+          echo "Contents of UBOOT_DIR configs:"
+          ls -la $UBOOT_DIR/configs/ | head -20
 
       - name: Generate Build Commands List
         run: |
@@ -98,7 +124,7 @@ jobs:
           for config_file in $UBOOT_DIR/configs/mt798*defconfig; do
             if [[ -f "$config_file" ]]; then
               config_name=$(basename "$config_file")
-              board_name=${config_name%.defconfig}
+              board_name=${config_name%.defconfig}  # 移除 .defconfig 后缀
               
               # 解析 SoC 类型
               if [[ $board_name =~ ^mt7981_ ]]; then
@@ -113,9 +139,9 @@ jobs:
               
               # 判断是否是 multi_layout 配置
               if [[ $config_name == *"_multi_layout_defconfig" ]]; then
-                lines_map["$board_name"]="SOC=$soc BOARD=$board_name MULTI_LAYOUT=1 VERSION=2024 ./build.sh"
+                lines_map["$board_name"]="SOC=$soc BOARD=$board_name MULTI_LAYOUT=1 VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
               else
-                lines_map["$board_name"]="SOC=$soc BOARD=$board_name VERSION=2024 ./build.sh"
+                lines_map["$board_name"]="SOC=$soc BOARD=$board_name VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
               fi
             fi
           done
@@ -130,10 +156,10 @@ jobs:
           cat Uboots.txt
           
           # 输出设备分类信息
-          echo "WRT_TYPE_7981=$(printf '%s ' "${type_7981_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ')" >> $GITHUB_ENV
-          echo "WRT_TYPE_7986=$(printf '%s ' "${type_7986_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ')" >> $GITHUB_ENV
+          echo "WRT_TYPE_7981=$(printf '%s ' "${type_7981_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >> $GITHUB_ENV
+          echo "WRT_TYPE_7986=$(printf '%s ' "${type_7986_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >> $GITHUB_ENV
           
-          # 移除末尾空格
+          # 确保没有多余空格
           sed -i 's/[[:space:]]*$//' Uboots.txt
 
       - name: Execute Build Commands from Uboots.txt
@@ -141,10 +167,14 @@ jobs:
           cd ./wrt/
           
           # 读取 Uboots.txt 并执行每行命令
+          total_lines=$(wc -l < Uboots.txt)
+          current_line=0
+          
           while IFS= read -r line; do
+            current_line=$((current_line + 1))
             if [[ -n "$line" ]]; then
               echo "=================================================="
-              echo "Executing: $line"
+              echo "Executing ($current_line/$total_lines): $line"
               echo "=================================================="
               
               # 执行命令
@@ -153,7 +183,8 @@ jobs:
               # 检查编译状态
               if [ $? -ne 0 ]; then
                 echo "Build failed for command: $line, continuing with next..."
-                continue
+              else
+                echo "Build succeeded for command: $line"
               fi
             fi
           done < Uboots.txt
