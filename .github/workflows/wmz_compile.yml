@@ -124,15 +124,19 @@ jobs:
           for config_file in $UBOOT_DIR/configs/mt798*defconfig; do
             if [[ -f "$config_file" ]]; then
               config_name=$(basename "$config_file")
-              board_name=${config_name%.defconfig}  # 移除 .defconfig 后缀
+              board_name=${config_name%.defconfig}  # 移除 .defconfig 后缀，得到类似 mt7986_ruijie_ew-6000gx-pro 的名称
               
-              # 解析 SoC 类型
+              # 解析 SoC 类型 - 从 board_name 开头提取
               if [[ $board_name =~ ^mt7981_ ]]; then
                 soc="mt7981"
-                type_7981_list+=("$(echo $board_name | cut -d'_' -f2- | tr '[:lower:]' '[:upper:]')")
+                # 提取设备型号（去掉 SoC 前缀）
+                device_model=$(echo $board_name | cut -d'_' -f2-)
+                type_7981_list+=("$(echo $device_model | tr '[:lower:]' '[:upper:]')")
               elif [[ $board_name =~ ^mt7986_ ]]; then
                 soc="mt7986"
-                type_7986_list+=("$(echo $board_name | cut -d'_' -f2- | tr '[:lower:]' '[:upper:]')")
+                # 提取设备型号（去掉 SoC 前缀）
+                device_model=$(echo $board_name | cut -d'_' -f2-)
+                type_7986_list+=("$(echo $device_model | tr '[:lower:]' '[:upper:]')")
               else
                 continue
               fi
@@ -161,6 +165,25 @@ jobs:
           
           # 确保没有多余空格
           sed -i 's/[[:space:]]*$//' Uboots.txt
+
+      - name: Show Sample Config Files
+        run: |
+          cd ./wrt/
+          
+          UBOOT_DIR="${{matrix.WRT_MTK}}"
+          
+          # 显示几个示例配置文件以确认格式
+          echo "Sample config files in $UBOOT_DIR/configs/:"
+          ls -la $UBOOT_DIR/configs/mt798*.defconfig | head -5
+          
+          # 验证第一个配置文件是否存在
+          first_config=$(ls $UBOOT_DIR/configs/mt798*.defconfig | head -n1)
+          if [ -f "$first_config" ]; then
+            echo "First config file exists: $first_config"
+            echo "Board name would be: $(basename $first_config .defconfig)"
+          else
+            echo "No config files found!"
+          fi
 
       - name: Execute Build Commands from Uboots.txt
         run: |
