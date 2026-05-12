@@ -80,32 +80,6 @@ jobs:
           echo "Updated build.sh:"
           grep -E "(UBOOT_DIR|ATF_DIR)" ./wrt/build.sh
 
-      - name: Verify Directories Exist
-        run: |
-          cd ./wrt/
-          
-          UBOOT_DIR="${{matrix.WRT_MTK}}"
-          ATF_DIR="${{matrix.WRT_ATF}}"
-          
-          echo "Checking directories..."
-          echo "UBOOT_DIR: $UBOOT_DIR exists: $(test -d $UBOOT_DIR && echo 'YES' || echo 'NO')"
-          echo "ATF_DIR: $ATF_DIR exists: $(test -d $ATF_DIR && echo 'YES' || echo 'NO')"
-          
-          if [ ! -d "$UBOOT_DIR" ]; then
-            echo "ERROR: UBOOT directory does not exist!"
-            ls -la
-            exit 1
-          fi
-          
-          if [ ! -d "$ATF_DIR" ]; then
-            echo "ERROR: ATF directory does not exist!"
-            ls -la
-            exit 1
-          fi
-          
-          echo "Contents of UBOOT_DIR configs:"
-          ls -la $UBOOT_DIR/configs/ | head -20
-
       - name: Generate Build Commands List
         run: |
           cd ./wrt/
@@ -121,32 +95,37 @@ jobs:
           declare -a type_7981_list=()
           declare -a type_7986_list=()
           
+          # 首先找出所有支持的配置文件
           for config_file in $UBOOT_DIR/configs/mt798*defconfig; do
             if [[ -f "$config_file" ]]; then
               config_name=$(basename "$config_file")
-              board_name=${config_name%.defconfig}  # 移除 .defconfig 后缀，得到类似 mt7986_ruijie_ew-6000gx-pro 的名称
-              
-              # 解析 SoC 类型 - 从 board_name 开头提取
-              if [[ $board_name =~ ^mt7981_ ]]; then
-                soc="mt7981"
-                # 提取设备型号（去掉 SoC 前缀）
-                device_model=$(echo $board_name | cut -d'_' -f2-)
-                type_7981_list+=("$(echo $device_model | tr '[:lower:]' '[:upper:]')")
-              elif [[ $board_name =~ ^mt7986_ ]]; then
-                soc="mt7986"
-                # 提取设备型号（去掉 SoC 前缀）
-                device_model=$(echo $board_name | cut -d'_' -f2-)
-                type_7986_list+=("$(echo $device_model | tr '[:lower:]' '[:upper:]')")
+              # 配置文件名格式如: mt7986_ruijie_ew-6000gx-pro_defconfig
+              # 我们需要从中提取 SoC 和设备名称
+              # 使用正则表达式匹配: <soc>_<device>_defconfig
+              if [[ $config_name =~ ^([a-z0-9]+)_([a-z0-9_-]+)_defconfig$ ]]; then
+                soc="${BASH_REMATCH[1]}"      # 如: mt7986
+                device="${BASH_REMATCH[2]}"   # 如: ruijie_ew-6000gx-pro
               else
                 continue
               fi
               
-              # 判断是否是 multi_layout 配置
-              if [[ $config_name == *"_multi_layout_defconfig" ]]; then
-                lines_map["$board_name"]="SOC=$soc BOARD=$board_name MULTI_LAYOUT=1 VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+              # 记录设备类型
+              if [[ $soc == "mt7981" ]]; then
+                type_7981_list+=("$(echo $device | tr '[:lower:]' '[:upper:]')")
+              elif [[ $soc == "mt7986" ]]; then
+                type_7986_list+=("$(echo $device | tr '[:lower:]' '[:upper:]')")
               else
-                lines_map["$board_name"]="SOC=$soc BOARD=$board_name VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                continue
               fi
+              
+              # 检查是否存在对应的 multi_layout 配置
+              multi_layout_config="$UBOOT_DIR/configs/${soc}_${device}_multi_layout_defconfig"
+              if [[ -f "$multi_layout_config" ]]; then
+                lines_map["${soc}_${device}_multi_layout"]="SOC=$soc BOARD=$device MULTI_LAYOUT=1 VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+              fi
+              
+              # 添加标准配置
+              lines_map["${soc}_${device}"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
             fi
           done
           
@@ -166,23 +145,29 @@ jobs:
           # 确保没有多余空格
           sed -i 's/[[:space:]]*$//' Uboots.txt
 
-      - name: Show Sample Config Files
+      - name: Show Build Info
         run: |
           cd ./wrt/
           
-          UBOOT_DIR="${{matrix.WRT_MTK}}"
+          echo "UBOOT_DIR contents:"
+          ls -la ${{matrix.WRT_MTK}}/configs/ | head -20
           
-          # 显示几个示例配置文件以确认格式
-          echo "Sample config files in $UBOOT_DIR/configs/:"
-          ls -la $UBOOT_DIR/configs/mt798*.defconfig | head -5
-          
-          # 验证第一个配置文件是否存在
-          first_config=$(ls $UBOOT_DIR/configs/mt798*.defconfig | head -n1)
-          if [ -f "$first_config" ]; then
-            echo "First config file exists: $first_config"
-            echo "Board name would be: $(basename $first_config .defconfig)"
-          else
-            echo "No config files found!"
+          echo ""
+          echo "Sample config file check:"
+          sample_config=$(ls ${{matrix.WRT_MTK}}/configs/mt798*defconfig | head -n1)
+          if [ -f "$sample_config" ]; then
+            echo "Sample config file: $sample_config"
+            config_basename=$(basename $sample_config)
+            echo "Config basename: $config_basename"
+            
+            # Test the regex pattern
+            if [[ $config_basename =~ ^([a-z0-9]+)_([a-z0-9_-]+)_defconfig$ ]]; then
+              soc="${BASH_REMATCH[1]}"
+              device="${BASH_REMATCH[2]}"
+              echo "Extracted SOC: $soc"
+              echo "Extracted DEVICE: $device"
+              echo "Expected BOARD variable: $device"
+            fi
           fi
 
       - name: Execute Build Commands from Uboots.txt
