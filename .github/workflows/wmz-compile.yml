@@ -34,10 +34,7 @@ jobs:
     needs: cleanup
     strategy:
       fail-fast: false
-      #max-parallel: 4
       matrix:
-        # WRT_ATF: [atf-20220606-637ba581b]
-        # WRT_MTK: [uboot-mtk-20230718-09eda825]
         WRT_ATF: [atf-20260123]
         WRT_MTK: [uboot-mtk-20250711]
 
@@ -73,70 +70,93 @@ jobs:
         run: |
           git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
 
-      - name: Compile Prepare
+      - name: Update Build Script
         run: |
+          # 修改 build.sh 中的 UBOOT_DIR 和 ATF_DIR
           sed -i "5s/UBOOT_DIR=.*/UBOOT_DIR=${{matrix.WRT_MTK}}/" ./wrt/build.sh
           sed -i "7s/ATF_DIR=.*/ATF_DIR=${{matrix.WRT_ATF}}/" ./wrt/build.sh
-
-          # 等待 build.sh 更新完成
-          sleep 2
-
-          # 查找特定版本的 uboot 目录并收集配置文件
-          UBOOT_DIR="./wrt/${{matrix.WRT_MTK}}"
-          if [ ! -d "$UBOOT_DIR" ]; then
-            echo "Error: U-Boot directory $UBOOT_DIR does not exist!"
-            ls -la ./wrt/
-            exit 1
-          fi
-
-          # 收集 uboot 配置并生成 Uboots.txt
-          declare -A lines_map
-          while IFS= read -r f; do
-            [[ $(basename "$f") =~ ^(mt798[16])_(.*)_defconfig$ ]] || continue
-            soc="${BASH_REMATCH[1]}"
-            rest="${BASH_REMATCH[2]}"
-            if [[ $rest == *_multi_layout ]]; then
-              lines_map["$rest"]="SOC=$soc BOARD=$rest MULTI_LAYOUT=1 VERSION=2024 ./build.sh"
-            else
-              lines_map["$rest"]="SOC=$soc BOARD=$rest VERSION=2024 ./build.sh"
-            fi
-          done < <(find "$UBOOT_DIR/configs" -type f -name 'mt798*defconfig' | grep -iE 'mt798[16]_' | grep -ivE 'rfb|fpga')
-
-          # 输出 Uboots.txt
-          printf "%s\n" "${lines_map[@]}" | sort > ./Uboots.txt
-          sed -i 's/_multi_layout//' ./Uboots.txt
-          cat ./Uboots.txt
-          # 生成 TYPE_7981 和 TYPE_7986（按 SOC 分类，BOARD 大写 + 排序）
-          for soc in 7981 7986; do
-            boards=$(awk -v s="SOC=mt$soc" '$0 ~ s {
-              for (i=1; i<=NF; i++) if ($i ~ /^BOARD=/) {
-                split($i, a, "="); print toupper(a[2]);
-              }
-            }' ./Uboots.txt | sort -u | xargs)
-            eval "TYPE_$soc=\"$boards\""
-          done
-
-          # 检查权限
-          mv -f Uboots.txt Uboots.sh
-          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
-
-          echo "WRT_TYPE_7981=$TYPE_7981" >> $GITHUB_ENV
-          echo "WRT_TYPE_7986=$TYPE_7986" >> $GITHUB_ENV
-
-      - name: Update Uboot Script References
-        run: |
-          # 替换 Uboots.sh 中的旧目录引用为新目录
-          sed -i "s/uboot-mtk-20230718-09eda825/${{matrix.WRT_MTK}}/g" $GITHUB_WORKSPACE/Uboots.sh
           
-          # 验证替换结果
-          echo "Updated Uboots.sh content:"
-          cat $GITHUB_WORKSPACE/Uboots.sh
+          # 验证修改
+          echo "Updated build.sh:"
+          grep -E "(UBOOT_DIR|ATF_DIR)" ./wrt/build.sh
 
-      - name: Compile Uboot
+      - name: Generate Build Commands List
         run: |
           cd ./wrt/
+          
+          # 创建 Uboots.txt 文件，列出所有支持的设备
+          UBOOT_DIR="${{matrix.WRT_MTK}}"
+          
+          # 清空文件
+          > Uboots.txt
+          
+          # 收集所有支持的设备
+          declare -A lines_map
+          declare -a type_7981_list=()
+          declare -a type_7986_list=()
+          
+          for config_file in $UBOOT_DIR/configs/mt798*defconfig; do
+            if [[ -f "$config_file" ]]; then
+              config_name=$(basename "$config_file")
+              board_name=${config_name%.defconfig}
+              
+              # 解析 SoC 类型
+              if [[ $board_name =~ ^mt7981_ ]]; then
+                soc="mt7981"
+                type_7981_list+=("$(echo $board_name | cut -d'_' -f2- | tr '[:lower:]' '[:upper:]')")
+              elif [[ $board_name =~ ^mt7986_ ]]; then
+                soc="mt7986"
+                type_7986_list+=("$(echo $board_name | cut -d'_' -f2- | tr '[:lower:]' '[:upper:]')")
+              else
+                continue
+              fi
+              
+              # 判断是否是 multi_layout 配置
+              if [[ $config_name == *"_multi_layout_defconfig" ]]; then
+                lines_map["$board_name"]="SOC=$soc BOARD=$board_name MULTI_LAYOUT=1 VERSION=2024 ./build.sh"
+              else
+                lines_map["$board_name"]="SOC=$soc BOARD=$board_name VERSION=2024 ./build.sh"
+              fi
+            fi
+          done
+          
+          # 输出到 Uboots.txt
+          for key in "${!lines_map[@]}"; do
+            echo "${lines_map[$key]}" >> Uboots.txt
+          done
+          
+          # 输出 Uboots.txt 内容
+          echo "Generated Uboots.txt:"
+          cat Uboots.txt
+          
+          # 输出设备分类信息
+          echo "WRT_TYPE_7981=$(printf '%s ' "${type_7981_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ')" >> $GITHUB_ENV
+          echo "WRT_TYPE_7986=$(printf '%s ' "${type_7986_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ')" >> $GITHUB_ENV
+          
+          # 移除末尾空格
+          sed -i 's/[[:space:]]*$//' Uboots.txt
 
-          $GITHUB_WORKSPACE/Uboots.sh
+      - name: Execute Build Commands from Uboots.txt
+        run: |
+          cd ./wrt/
+          
+          # 读取 Uboots.txt 并执行每行命令
+          while IFS= read -r line; do
+            if [[ -n "$line" ]]; then
+              echo "=================================================="
+              echo "Executing: $line"
+              echo "=================================================="
+              
+              # 执行命令
+              eval "$line"
+              
+              # 检查编译状态
+              if [ $? -ne 0 ]; then
+                echo "Build failed for command: $line, continuing with next..."
+                continue
+              fi
+            fi
+          done < Uboots.txt
 
       - name: Machine Information
         run: |
