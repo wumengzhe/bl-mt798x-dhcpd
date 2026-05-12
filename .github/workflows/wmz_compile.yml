@@ -1,4 +1,4 @@
-name: 798x-UBOOT-WMZ
+name: 798x-UBOOT-NEW
 
 on:
   #自动编译：每周日早上4点
@@ -80,7 +80,48 @@ jobs:
           echo "Updated build.sh:"
           grep -E "(UBOOT_DIR|ATF_DIR)" ./wrt/build.sh
 
-      - name: Generate Build Commands List (Fixed)
+      - name: Analyze Configuration Files
+        run: |
+          cd ./wrt/
+          
+          echo "Analyzing configuration files..."
+          
+          # 遍历所有配置文件
+          for config_file in ${{matrix.WRT_MTK}}/configs/mt798*defconfig; do
+            if [[ -f "$config_file" ]]; then
+              config_name=$(basename "$config_file")
+              echo "Found config: $config_name"
+              
+              # 解析配置文件名格式
+              if [[ $config_name =~ ^([a-z0-9]+)_([a-z0-9_-]+)_defconfig$ ]]; then
+                soc="${BASH_REMATCH[1]}"
+                base_device="${BASH_REMATCH[2]}"
+                
+                # 检查是否是 multi_layout 配置
+                if [[ $base_device == *_multi_layout ]]; then
+                  device="${base_device%_multi_layout}"
+                  type="multi_layout"
+                else
+                  device="$base_device"
+                  type="standard"
+                fi
+                
+                echo "  SoC: $soc, Device: $device, Type: $type"
+                
+                # 检查是否存在对应的 multi_layout 配置
+                if [[ $type == "standard" ]]; then
+                  multi_layout_file="${{matrix.WRT_MTK}}/configs/${soc}_${device}_multi_layout_defconfig"
+                  if [[ -f "$multi_layout_file" ]]; then
+                    echo "  Has multi_layout variant: YES"
+                  else
+                    echo "  Has multi_layout variant: NO"
+                  fi
+                fi
+              fi
+            fi
+          done
+
+      - name: Generate Build Commands List (Corrected)
         run: |
           cd ./wrt/
           
@@ -92,66 +133,52 @@ jobs:
           declare -a type_7981_list=()
           declare -a type_7986_list=()
           
-          # 获取所有配置文件
-          config_files=($(ls ${{matrix.WRT_MTK}}/configs/mt798*defconfig 2>/dev/null))
+          # 收集所有标准配置文件（不含 _multi_layout）
+          declare -A all_devices
           
-          for config_file in "${config_files[@]}"; do
+          for config_file in ${{matrix.WRT_MTK}}/configs/mt798*defconfig; do
             if [[ -f "$config_file" ]]; then
               config_name=$(basename "$config_file")
               
-              # 解析配置文件名：mt7981_<device>_defconfig 或 mt7981_<device>_multi_layout_defconfig
-              # 使用更简单的解析方法：去掉前缀 mt7981_ 和后缀 _defconfig/_multi_layout_defconfig
-              device_name="${config_name#mt7981_}"  # 移除 mt7981_
-              device_name="${device_name%_defconfig}"  # 移除 _defconfig
-              device_name="${device_name%_multi_layout}"  # 移除 _multi_layout
-              
-              # 如果设备名中还有 _defconfig（比如 multi_layout 的情况）
-              if [[ "$device_name" == *_defconfig ]]; then
-                device_name="${device_name%_defconfig}"
+              # 解析配置文件名
+              if [[ $config_name =~ ^([a-z0-9]+)_([a-z0-9_-]+)_defconfig$ ]]; then
+                soc="${BASH_REMATCH[1]}"
+                base_device="${BASH_REMATCH[2]}"
+                
+                # 检查是否是 multi_layout 配置
+                if [[ $base_device == *_multi_layout ]]; then
+                  device="${base_device%_multi_layout}"
+                  is_multi_layout=true
+                else
+                  device="$base_device"
+                  is_multi_layout=false
+                fi
+                
+                # 记录设备信息
+                if [[ $soc == "mt7981" ]]; then
+                  type_7981_list+=("$(echo $device | tr '[:lower:]' '[:upper:]')")
+                elif [[ $soc == "mt7986" ]]; then
+                  type_7986_list+=("$(echo $device | tr '[:lower:]' '[:upper:]')")
+                fi
+                
+                # 如果是标准配置（非 multi_layout），记录设备
+                if [[ $is_multi_layout == false ]]; then
+                  all_devices["$soc,$device"]=1
+                  
+                  # 检查是否存在对应的 multi_layout 配置
+                  multi_layout_config="${{matrix.WRT_MTK}}/configs/${soc}_${device}_multi_layout_defconfig"
+                  if [[ -f "$multi_layout_config" ]]; then
+                    # 添加标准配置命令
+                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                    
+                    # 添加 multi_layout 配置命令
+                    lines_map["${soc}_${device}_multi_layout"]="SOC=$soc BOARD=$device MULTI_LAYOUT=1 VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                  else
+                    # 只添加标准配置命令
+                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                  fi
+                fi
               fi
-              
-              # 确保设备名不为空
-              if [[ -z "$device_name" ]]; then
-                continue
-              fi
-              
-              # 确定 SoC 类型
-              soc="mt7981"
-              if [[ "$config_name" =~ ^mt7986_ ]]; then
-                soc="mt7986"
-              fi
-              
-              # 记录设备类型
-              if [[ "$soc" == "mt7981" ]]; then
-                type_7981_list+=("$(echo $device_name | tr '[:lower:]' '[:upper:]')")
-              elif [[ "$soc" == "mt7986" ]]; then
-                type_7986_list+=("$(echo $device_name | tr '[:lower:]' '[:upper:]')")
-              fi
-              
-              # 判断是否是 multi_layout 配置
-              is_multi_layout=0
-              if [[ "$config_name" == *_multi_layout_defconfig ]]; then
-                is_multi_layout=1
-              fi
-              
-              # 构建命令
-              base_cmd="SOC=$soc BOARD=$device_name VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
-              
-              if [[ "$is_multi_layout" -eq 1 ]]; then
-                # 对于 multi_layout 配置，需要设置 MULTI_LAYOUT=1
-                cmd="$base_cmd MULTI_LAYOUT=1"
-              else
-                # 标准配置
-                cmd="$base_cmd"
-              fi
-              
-              # 存储命令（使用唯一键）
-              key="${soc}_${device_name}"
-              if [[ "$is_multi_layout" -eq 1 ]]; then
-                key="${key}_multi_layout"
-              fi
-              
-              lines_map["$key"]="$cmd"
             fi
           done
           
@@ -170,6 +197,17 @@ jobs:
           
           # 清理空格
           sed -i 's/[[:space:]]*$//' Uboots.txt
+
+      - name: Verify Generated Commands
+        run: |
+          cd ./wrt/
+          
+          echo "Checking for incorrect BOARD values:"
+          grep "_multi_layout" Uboots.txt | grep -v "MULTI_LAYOUT=1" || echo "No incorrect BOARD values found"
+          
+          echo ""
+          echo "Checking correct MULTI_LAYOUT usage:"
+          grep "MULTI_LAYOUT=1" Uboots.txt
 
       - name: Execute Build Commands from Uboots.txt
         run: |
