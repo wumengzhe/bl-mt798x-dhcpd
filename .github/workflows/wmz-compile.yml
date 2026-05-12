@@ -38,7 +38,7 @@ jobs:
       matrix:
         # WRT_ATF: [atf-20220606-637ba581b]
         # WRT_MTK: [uboot-mtk-20230718-09eda825]
-        WRT_ATF: [atf-20220260123]
+        WRT_ATF: [atf-20260123]
         WRT_MTK: [uboot-mtk-20250711]
 
     steps:
