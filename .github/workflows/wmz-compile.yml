@@ -1,4 +1,4 @@
-name: 798x-UBOOT
+name: 798x-UBOOT-NEW
 
 on:
   #自动编译：每周日早上4点
@@ -73,21 +73,59 @@ jobs:
       - name: Update Build Script
         run: |
           # 修改 build.sh 中的 UBOOT_DIR 和 ATF_DIR
-          sed -i "5s/UBOOT_DIR=.*/UBOOT_DIR=${{matrix.WRT_MTK}}/" ./wrt/build.sh
-          sed -i "7s/ATF_DIR=.*/ATF_DIR=${{matrix.WRT_ATF}}/" ./wrt/build.sh
+          sed -i "s/UBOOT_DIR=.*/UBOOT_DIR=${{matrix.WRT_MTK}}/" ./wrt/build.sh
+          sed -i "s/ATF_DIR=.*/ATF_DIR=${{matrix.WRT_ATF}}/" ./wrt/build.sh
           
           # 验证修改
           echo "Updated build.sh:"
           grep -E "(UBOOT_DIR|ATF_DIR)" ./wrt/build.sh
 
-      - name: Generate Build Commands List
+      - name: Analyze Configuration Files
         run: |
           cd ./wrt/
           
-          # 创建 Uboots.txt 文件，列出所有支持的设备
-          UBOOT_DIR="${{matrix.WRT_MTK}}"
+          echo "Analyzing configuration files..."
           
-          # 清空文件
+          # 遍历所有配置文件
+          for config_file in ${{matrix.WRT_MTK}}/configs/mt798*defconfig; do
+            if [[ -f "$config_file" ]]; then
+              config_name=$(basename "$config_file")
+              echo "Found config: $config_name"
+              
+              # 解析配置文件名格式
+              if [[ $config_name =~ ^([a-z0-9]+)_([a-z0-9_-]+)_defconfig$ ]]; then
+                soc="${BASH_REMATCH[1]}"
+                base_device="${BASH_REMATCH[2]}"
+                
+                # 检查是否是 multi_layout 配置
+                if [[ $base_device == *_multi_layout ]]; then
+                  device="${base_device%_multi_layout}"
+                  type="multi_layout"
+                else
+                  device="$base_device"
+                  type="standard"
+                fi
+                
+                echo "  SoC: $soc, Device: $device, Type: $type"
+                
+                # 检查是否存在对应的 multi_layout 配置
+                if [[ $type == "standard" ]]; then
+                  multi_layout_file="${{matrix.WRT_MTK}}/configs/${soc}_${device}_multi_layout_defconfig"
+                  if [[ -f "$multi_layout_file" ]]; then
+                    echo "  Has multi_layout variant: YES"
+                  else
+                    echo "  Has multi_layout variant: NO"
+                  fi
+                fi
+              fi
+            fi
+          done
+
+      - name: Generate Build Commands List (Corrected)
+        run: |
+          cd ./wrt/
+          
+          # 创建 Uboots.txt 文件
           > Uboots.txt
           
           # 收集所有支持的设备
@@ -95,27 +133,51 @@ jobs:
           declare -a type_7981_list=()
           declare -a type_7986_list=()
           
-          for config_file in $UBOOT_DIR/configs/mt798*defconfig; do
+          # 收集所有标准配置文件（不含 _multi_layout）
+          declare -A all_devices
+          
+          for config_file in ${{matrix.WRT_MTK}}/configs/mt798*defconfig; do
             if [[ -f "$config_file" ]]; then
               config_name=$(basename "$config_file")
-              board_name=${config_name%.defconfig}
               
-              # 解析 SoC 类型
-              if [[ $board_name =~ ^mt7981_ ]]; then
-                soc="mt7981"
-                type_7981_list+=("$(echo $board_name | cut -d'_' -f2- | tr '[:lower:]' '[:upper:]')")
-              elif [[ $board_name =~ ^mt7986_ ]]; then
-                soc="mt7986"
-                type_7986_list+=("$(echo $board_name | cut -d'_' -f2- | tr '[:lower:]' '[:upper:]')")
-              else
-                continue
-              fi
-              
-              # 判断是否是 multi_layout 配置
-              if [[ $config_name == *"_multi_layout_defconfig" ]]; then
-                lines_map["$board_name"]="SOC=$soc BOARD=$board_name MULTI_LAYOUT=1 VERSION=2024 ./build.sh"
-              else
-                lines_map["$board_name"]="SOC=$soc BOARD=$board_name VERSION=2024 ./build.sh"
+              # 解析配置文件名
+              if [[ $config_name =~ ^([a-z0-9]+)_([a-z0-9_-]+)_defconfig$ ]]; then
+                soc="${BASH_REMATCH[1]}"
+                base_device="${BASH_REMATCH[2]}"
+                
+                # 检查是否是 multi_layout 配置
+                if [[ $base_device == *_multi_layout ]]; then
+                  device="${base_device%_multi_layout}"
+                  is_multi_layout=true
+                else
+                  device="$base_device"
+                  is_multi_layout=false
+                fi
+                
+                # 记录设备信息
+                if [[ $soc == "mt7981" ]]; then
+                  type_7981_list+=("$(echo $device | tr '[:lower:]' '[:upper:]')")
+                elif [[ $soc == "mt7986" ]]; then
+                  type_7986_list+=("$(echo $device | tr '[:lower:]' '[:upper:]')")
+                fi
+                
+                # 如果是标准配置（非 multi_layout），记录设备
+                if [[ $is_multi_layout == false ]]; then
+                  all_devices["$soc,$device"]=1
+                  
+                  # 检查是否存在对应的 multi_layout 配置
+                  multi_layout_config="${{matrix.WRT_MTK}}/configs/${soc}_${device}_multi_layout_defconfig"
+                  if [[ -f "$multi_layout_config" ]]; then
+                    # 添加标准配置命令
+                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                    
+                    # 添加 multi_layout 配置命令
+                    lines_map["${soc}_${device}_multi_layout"]="SOC=$soc BOARD=$device MULTI_LAYOUT=1 VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                  else
+                    # 只添加标准配置命令
+                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                  fi
+                fi
               fi
             fi
           done
@@ -125,26 +187,41 @@ jobs:
             echo "${lines_map[$key]}" >> Uboots.txt
           done
           
-          # 输出 Uboots.txt 内容
+          # 输出内容
           echo "Generated Uboots.txt:"
           cat Uboots.txt
           
           # 输出设备分类信息
-          echo "WRT_TYPE_7981=$(printf '%s ' "${type_7981_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ')" >> $GITHUB_ENV
-          echo "WRT_TYPE_7986=$(printf '%s ' "${type_7986_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ')" >> $GITHUB_ENV
+          echo "WRT_TYPE_7981=$(printf '%s ' "${type_7981_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >> $GITHUB_ENV
+          echo "WRT_TYPE_7986=$(printf '%s ' "${type_7986_list[@]}" | xargs -n1 | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >> $GITHUB_ENV
           
-          # 移除末尾空格
+          # 清理空格
           sed -i 's/[[:space:]]*$//' Uboots.txt
+
+      - name: Verify Generated Commands
+        run: |
+          cd ./wrt/
+          
+          echo "Checking for incorrect BOARD values:"
+          grep "_multi_layout" Uboots.txt | grep -v "MULTI_LAYOUT=1" || echo "No incorrect BOARD values found"
+          
+          echo ""
+          echo "Checking correct MULTI_LAYOUT usage:"
+          grep "MULTI_LAYOUT=1" Uboots.txt
 
       - name: Execute Build Commands from Uboots.txt
         run: |
           cd ./wrt/
           
           # 读取 Uboots.txt 并执行每行命令
+          total_lines=$(wc -l < Uboots.txt)
+          current_line=0
+          
           while IFS= read -r line; do
+            current_line=$((current_line + 1))
             if [[ -n "$line" ]]; then
               echo "=================================================="
-              echo "Executing: $line"
+              echo "Executing ($current_line/$total_lines): $line"
               echo "=================================================="
               
               # 执行命令
@@ -153,7 +230,8 @@ jobs:
               # 检查编译状态
               if [ $? -ne 0 ]; then
                 echo "Build failed for command: $line, continuing with next..."
-                continue
+              else
+                echo "Build succeeded for command: $line"
               fi
             fi
           done < Uboots.txt
