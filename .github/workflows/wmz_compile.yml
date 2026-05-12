@@ -123,6 +123,15 @@ jobs:
           echo "WRT_TYPE_7981=$TYPE_7981" >> $GITHUB_ENV
           echo "WRT_TYPE_7986=$TYPE_7986" >> $GITHUB_ENV
 
+      - name: Update Uboot Script References
+        run: |
+          # 替换 Uboots.sh 中的旧目录引用为新目录
+          sed -i "s/uboot-mtk-20230718-09eda825/${{matrix.WRT_MTK}}/g" $GITHUB_WORKSPACE/Uboots.sh
+          
+          # 验证替换结果
+          echo "Updated Uboots.sh content:"
+          cat $GITHUB_WORKSPACE/Uboots.sh
+
       - name: Compile Uboot
         run: |
           cd ./wrt/
