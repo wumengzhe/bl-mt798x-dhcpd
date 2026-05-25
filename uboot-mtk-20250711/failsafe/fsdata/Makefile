@@ -9,6 +9,10 @@ obj-y += 404.o
 FILE_404.o := 404.html
 FSPATH_404.o := 404.html
 
+obj-$(CONFIG_WEBUI_FAILSAFE_BACKUP) += backup.o
+FILE_backup.o := backup.html
+FSPATH_backup.o := backup.html
+
 obj-y += bl2.o
 FILE_bl2.o := bl2.html
 FSPATH_bl2.o := bl2.html
@@ -17,13 +21,9 @@ obj-y += booting.o
 FILE_booting.o := booting.html
 FSPATH_booting.o := booting.html
 
-obj-$(CONFIG_WEBUI_FAILSAFE_BACKUP) += backup.o
-FILE_backup.o := backup.html
-FSPATH_backup.o := backup.html
-
-obj-$(CONFIG_WEBUI_FAILSAFE_FLASH) += flash.o
-FILE_flash.o := flash.html
-FSPATH_flash.o := flash.html
+obj-$(CONFIG_WEBUI_FAILSAFE_CONSOLE) += console.o
+FILE_console.o := console.html
+FSPATH_console.o := console.html
 
 obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env.o
 FILE_env.o := env.html
@@ -36,6 +36,10 @@ FSPATH_factory.o := factory.html
 obj-y += fail.o
 FILE_fail.o := fail.html
 FSPATH_fail.o := fail.html
+
+obj-$(CONFIG_WEBUI_FAILSAFE_FLASH) += flash.o
+FILE_flash.o := flash.html
+FSPATH_flash.o := flash.html
 
 obj-y += flashing.o
 FILE_flashing.o := flashing.html
@@ -53,41 +57,61 @@ obj-y += initramfs.o
 FILE_initramfs.o := initramfs.html
 FSPATH_initramfs.o := initramfs.html
 
-obj-$(CONFIG_WEBUI_FAILSAFE_I18N) += i18n.o
-FILE_i18n.o := i18n.js
-FSPATH_i18n.o := i18n.js
-
-obj-y += favicon.o
-FILE_favicon.o := favicon.svg
-FSPATH_favicon.o := favicon.svg
-
-obj-y += main.o
-FILE_main.o := main.js
-FSPATH_main.o := main.js
-
-obj-y += themeloader.o
-FILE_themeloader.o := themeloader.js
-FSPATH_themeloader.o := themeloader.js
-
 obj-y += reboot.o
 FILE_reboot.o := reboot.html
 FSPATH_reboot.o := reboot.html
+
+obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += settings.o
+FILE_settings.o := settings.html
+FSPATH_settings.o := settings.html
 
 obj-$(CONFIG_WEBUI_FAILSAFE_SIMG) += simg.o
 FILE_simg.o := simg.html
 FSPATH_simg.o := simg.html
 
-obj-$(CONFIG_WEBUI_FAILSAFE_CONSOLE) += console.o
-FILE_console.o := console.html
-FSPATH_console.o := console.html
+obj-y += uboot.o
+FILE_uboot.o := uboot.html
+FSPATH_uboot.o := uboot.html
+
+obj-y += favicon.o
+FILE_favicon.o := favicon.svg
+FSPATH_favicon.o := favicon.svg
 
 obj-y += style.o
 FILE_style.o := style.css
 FSPATH_style.o := style.css
 
-obj-y += uboot.o
-FILE_uboot.o := uboot.html
-FSPATH_uboot.o := uboot.html
+obj-$(CONFIG_WEBUI_FAILSAFE_BACKUP) += backup_js.o
+FILE_backup_js.o := backup_js.js
+FSPATH_backup_js.o := backup_js.js
+
+obj-$(CONFIG_WEBUI_FAILSAFE_CONSOLE) += console_js.o
+FILE_console_js.o := console_js.js
+FSPATH_console_js.o := console_js.js
+
+obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += env_js.o
+FILE_env_js.o := env_js.js
+FSPATH_env_js.o := env_js.js
+
+obj-$(CONFIG_WEBUI_FAILSAFE_FLASH) += flash_js.o
+FILE_flash_js.o := flash_js.js
+FSPATH_flash_js.o := flash_js.js
+
+obj-$(CONFIG_WEBUI_FAILSAFE_I18N) += i18n.o
+FILE_i18n.o := i18n.js
+FSPATH_i18n.o := i18n.js
+
+obj-y += main.o
+FILE_main.o := main.js
+FSPATH_main.o := main.js
+
+obj-$(CONFIG_WEBUI_FAILSAFE_ENV) += settings_js.o
+FILE_settings_js.o := settings_js.js
+FSPATH_settings_js.o := settings_js.js
+
+obj-y += theme.o
+FILE_theme.o := theme.js
+FSPATH_theme.o := theme.js
 
 # customized build rules
 strip_path = $(subst /,_,$(subst -,_,$(subst .,_,$(1))))

@@ -47,16 +47,22 @@ function getmtdlayoutlist() {
 
             var mtd_layout = mtd_layout_list.split(';');
 
-            document.getElementById('current_mtd_layout').innerHTML = "Current mtd layout: " + mtd_layout[0];
+            var curEl = document.getElementById('current_mtd_layout');
+            if (curEl) {
+                var cur = mtd_layout[0];
+                curEl.innerHTML = cur ? "Current mtd layout: " + cur : "";
+            }
 
             var e = document.getElementById('mtd_layout_label');
+            var hasOptions = false;
 
             for (var i = 1; i < mtd_layout.length; i++) {
                 if (mtd_layout[i].length > 0) {
                     e.options.add(new Option(mtd_layout[i], mtd_layout[i]));
+                    hasOptions = true;
                 }
             }
-            document.getElementById('mtd_layout').style.display = '';
+            document.getElementById('mtd_layout').style.display = hasOptions ? '' : 'none';
         }
     })
 }
@@ -908,6 +914,8 @@ async function flashRestoreOld() {
                         reject(new Error('bad'));
                         return;
                     }
+                    if (j.alert)
+                        window.__flash_restore_alert = j.alert;
                     resolve();
                 };
                 xhr.open('POST', '/flash/restore');
@@ -930,6 +938,8 @@ async function flashRestoreOld() {
         }
 
         setFlashStatusOld('Done.');
+        alert(window.__flash_restore_alert || 'Backup restore completed.');
+        window.__flash_restore_alert = '';
     } catch (e) {
         setFlashStatusOld('Error: ' + (e && e.message ? e.message : String(e)));
     }

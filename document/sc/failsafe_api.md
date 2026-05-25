@@ -28,7 +28,7 @@
 
 UI 资源风格（3 选 1）：
 
-- `CONFIG_WEBUI_FAILSAFE_UI_NEW`（`fsdata/`）
+- `CONFIG_WEBUI_FAILSAFE_UI_BOOTSTRAP`（`fsdata/`）
 - `CONFIG_WEBUI_FAILSAFE_UI_MTK`（`fsdata_mtk/`）
 - `CONFIG_WEBUI_FAILSAFE_UI_GL`（`fsdata_old/`）
 
@@ -367,7 +367,7 @@ UI 资源风格（3 选 1）：
 
 ## 9. 主题与图标 API（新 UI）
 
-> `theme_*` 接口注册条件：`CONFIG_WEBUI_FAILSAFE_ENV && CONFIG_WEBUI_FAILSAFE_UI_NEW`
+> `theme_*` 接口注册条件：`CONFIG_WEBUI_FAILSAFE_ENV && CONFIG_WEBUI_FAILSAFE_UI_BOOTSTRAP`
 
 ### 9.1 `GET /theme/get`
 

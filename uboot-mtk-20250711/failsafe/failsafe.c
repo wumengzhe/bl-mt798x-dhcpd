@@ -14,7 +14,12 @@
 #include <net.h>
 #include <net/mtk_tcp.h>
 #include <net/mtk_httpd.h>
+#ifdef CONFIG_MTK_DHCPD
 #include <net/mtk_dhcpd.h>
+#endif
+#ifdef CONFIG_MTK_TELNETD
+#include <net/mtk_telnetd.h>
+#endif
 #include <u-boot/md5.h>
 #include <linux/stringify.h>
 #include <linux/string.h>
@@ -44,10 +49,14 @@ static bool auto_action_pending;
 static failsafe_fw_t fw_type;
 static bool failsafe_httpd_running;
 
-#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
-static const char *mtd_layout_label;
-const char *get_mtd_layout_label(void);
 #define MTD_LAYOUTS_MAXLEN	128
+#define MTD_LAYOUT_CUSTOM_LABEL	"custom"
+#define MTD_LAYOUT_CUSTOM_ENV	"mtd_layout_custom"
+
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+static char mtd_layout_label[MTD_LAYOUTS_MAXLEN];
+static bool mtd_layout_save_pending;
+const char *get_mtd_layout_label(void);
 #endif
 
 int __weak failsafe_validate_image(const void *data, size_t size, failsafe_fw_t fw)
@@ -60,9 +69,27 @@ int __weak failsafe_write_image(const void *data, size_t size, failsafe_fw_t fw)
 	return -ENOSYS;
 }
 
+static bool services_auto_started;
+
 void schedule_hook(void)
 {
-	if (!failsafe_httpd_running)
+	bool need_poll = failsafe_httpd_running;
+
+#ifdef CONFIG_MTK_DHCPD
+	need_poll = need_poll || mtk_dhcpd_is_running();
+#endif
+
+	if (!services_auto_started && !failsafe_httpd_running) {
+		services_auto_started = true;
+#ifdef CONFIG_MTK_DHCPD
+		if (!mtk_dhcpd_is_running()) {
+			printf("Starting DHCP server...\n");
+			mtk_dhcpd_start();
+			need_poll = true;
+		}
+#endif
+	}
+	if (!need_poll)
 		return;
 
 #if defined(CONFIG_MTK_TCP)
@@ -152,6 +179,73 @@ static bool failsafe_auto_reboot_enabled(void)
 
 	return false;
 }
+
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+static void failsafe_prepare_mtd_layout(void)
+{
+	const char *cur_layout, *env_layout;
+
+	if (!mtd_layout_label[0])
+		return;
+
+	cur_layout = get_mtd_layout_label();
+	env_layout = env_get("mtd_layout");
+
+	if (!cur_layout || strcmp(cur_layout, mtd_layout_label) ||
+	    !env_layout || strcmp(env_layout, mtd_layout_label)) {
+		printf("httpd: switching mtd layout: %s\n", mtd_layout_label);
+		env_set("mtd_layout", mtd_layout_label);
+		env_set("mtd_layout_label", mtd_layout_label);
+	}
+
+	env_set("mtdids", NULL);
+	env_set("mtdparts", NULL);
+}
+
+static void failsafe_save_mtd_layout(void)
+{
+	const char *env_layout, *legacy_layout;
+	bool need_save = false;
+
+	if (!mtd_layout_save_pending)
+		return;
+
+	env_layout = env_get("mtd_layout");
+	legacy_layout = env_get("mtd_layout_label");
+
+	if (!env_layout || strcmp(env_layout, mtd_layout_label)) {
+		env_set("mtd_layout", mtd_layout_label);
+		need_save = true;
+	}
+
+	if (!legacy_layout || strcmp(legacy_layout, mtd_layout_label)) {
+		env_set("mtd_layout_label", mtd_layout_label);
+		need_save = true;
+	}
+
+	if (env_get("mtdids")) {
+		env_set("mtdids", NULL);
+		need_save = true;
+	}
+
+	if (env_get("mtdparts")) {
+		env_set("mtdparts", NULL);
+		need_save = true;
+	}
+
+	if (!need_save) {
+		mtd_layout_save_pending = false;
+		return;
+	}
+
+	if (!env_save())
+		printf("httpd: saved mtd layout: %s\n", mtd_layout_label);
+	else
+		printf("Warning: failed to save mtd layout env\n");
+
+	mtd_layout_save_pending = false;
+}
+#endif
 
 static int output_plain_file(struct httpd_response *response,
 			     const char *filename)
@@ -305,11 +399,13 @@ static void sysinfo_handler(enum httpd_uri_handler_status status,
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	{
 		const char *cur = get_mtd_layout_label();
+		const char *custom_parts = env_get(MTD_LAYOUT_CUSTOM_ENV);
 		char esc_cur[128];
 		const char *cur_parts = NULL;
 		char esc_cur_parts[512];
 		ofnode node, layout;
 		bool first = true;
+		bool custom_seen = false;
 
 		json_escape(esc_cur, sizeof(esc_cur), cur ? cur : "");
 		len += snprintf(buf + len, left - len,
@@ -327,6 +423,11 @@ static void sysinfo_handler(enum httpd_uri_handler_status status,
 
 				if (!label)
 					continue;
+				if (!strcmp(label, MTD_LAYOUT_CUSTOM_LABEL)) {
+					custom_seen = true;
+					if (custom_parts && custom_parts[0])
+						parts = custom_parts;
+				}
 				json_escape(esc_label, sizeof(esc_label), label);
 				json_escape(esc_parts, sizeof(esc_parts), parts ? parts : "");
 				if (cur && !strcmp(label, cur))
@@ -336,9 +437,31 @@ static void sysinfo_handler(enum httpd_uri_handler_status status,
 					first ? "" : ",", esc_label, esc_parts);
 				first = false;
 			}
+			if (custom_parts && custom_parts[0] && !custom_seen) {
+				char esc_parts[512];
+
+				json_escape(esc_parts, sizeof(esc_parts), custom_parts);
+				if (cur && !strcmp(cur, MTD_LAYOUT_CUSTOM_LABEL))
+					cur_parts = custom_parts;
+				len += snprintf(buf + len, left - len,
+					"%s{\"label\":\"%s\",\"parts\":\"%s\"}",
+					first ? "" : ",", MTD_LAYOUT_CUSTOM_LABEL,
+					esc_parts);
+			}
 			len += snprintf(buf + len, left - len, "],");
 		} else {
-			len += snprintf(buf + len, left - len, "\"layouts\":[],");
+			if (custom_parts && custom_parts[0]) {
+				char esc_parts[512];
+
+				json_escape(esc_parts, sizeof(esc_parts), custom_parts);
+				if (cur && !strcmp(cur, MTD_LAYOUT_CUSTOM_LABEL))
+					cur_parts = custom_parts;
+				len += snprintf(buf + len, left - len,
+					"\"layouts\":[{\"label\":\"%s\",\"parts\":\"%s\"}],",
+					MTD_LAYOUT_CUSTOM_LABEL, esc_parts);
+			} else {
+				len += snprintf(buf + len, left - len, "\"layouts\":[],");
+			}
 		}
 
 		json_escape(esc_cur_parts, sizeof(esc_cur_parts), cur_parts ? cur_parts : "");
@@ -621,6 +744,10 @@ done:
 	upload_data_id = upload_id;
 	upload_data = fw->data;
 	upload_size = fw->size;
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+	mtd_layout_label[0] = '\0';
+	mtd_layout_save_pending = false;
+#endif
 
 	md5_wd((u8 *)fw->data, fw->size, md5_sum, 0);
 	for (i = 0; i < 16; i++) {
@@ -632,13 +759,15 @@ done:
 
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	if (mtd) {
-		mtd_layout_label = mtd->data;
-		sprintf(resp, "%ld %s %s", fw->size, md5_str, mtd->data);
+		snprintf(mtd_layout_label, sizeof(mtd_layout_label),
+			 "%s", mtd->data);
+		snprintf(resp, sizeof(resp), "%ld %s %s", fw->size, md5_str,
+			 mtd_layout_label);
 	} else {
-		sprintf(resp, "%ld %s", fw->size, md5_str);
+		snprintf(resp, sizeof(resp), "%ld %s", fw->size, md5_str);
 	}
 #else
-	sprintf(resp, "%ld %s", fw->size, md5_str);
+	snprintf(resp, sizeof(resp), "%ld %s", fw->size, md5_str);
 #endif
 
 	response->data = resp;
@@ -699,26 +828,18 @@ static void result_handler(enum httpd_uri_handler_status status,
 
 		if (upload_data_id == upload_id) {
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
-			if (mtd_layout_label) {
-				const char *cur_layout = get_mtd_layout_label();
-				const char *env_layout = env_get("mtd_layout");
-
-				if (!cur_layout || strcmp(cur_layout, mtd_layout_label) ||
-				    !env_layout || strcmp(env_layout, mtd_layout_label)) {
-					printf("httpd: saving mtd layout: %s\n", mtd_layout_label);
-					env_set("mtd_layout", mtd_layout_label);
-					env_set("mtd_layout_label", mtd_layout_label);
-					env_set("mtdids", NULL);
-					env_set("mtdparts", NULL);
-					env_save();
-				}
-			}
+			failsafe_prepare_mtd_layout();
+			mtd_layout_save_pending = mtd_layout_label[0] != '\0';
 #endif
 			if (fw_type == FW_TYPE_INITRD)
 				st->ret = 0;
 			else
 				st->ret = failsafe_write_image(upload_data,
 							       upload_size, fw_type);
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+			if (st->ret)
+				mtd_layout_save_pending = false;
+#endif
 		}
 
 		/* invalidate upload identifier */
@@ -743,6 +864,11 @@ static void result_handler(enum httpd_uri_handler_status status,
 		auto_action_pending = upgrade_success &&
 			(fw_type == FW_TYPE_INITRD || failsafe_auto_reboot_enabled());
 
+#ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+		if (upgrade_success)
+			failsafe_save_mtd_layout();
+#endif
+
 		free(response->session_data);
 
 		if (auto_action_pending)
@@ -760,18 +886,66 @@ static void style_handler(enum httpd_uri_handler_status status,
 	}
 }
 
+/*
+ * Select JS file name from request URI. If the basename matches a known
+ * JavaScript filename, return it; otherwise fall back to "main.js".
+ */
+static const char *select_js_file(const char *uri)
+{
+	static const char *allowed[] = {
+		"main.js",
+		"i18n.js",
+		"theme.js",
+		"backup_js.js",
+		"console_js.js",
+		"env_js.js",
+		"flash_js.js",
+		"settings_js.js",
+		NULL
+	};
+	const char *basename;
+	const char *slash_ptr;
+	size_t basename_len;
+	int allowed_index;
+
+	if (!uri || !uri[0])
+		return "main.js";
+
+	slash_ptr = strrchr(uri, '/');
+	basename = slash_ptr ? slash_ptr + 1 : uri;
+
+	/* strip query/hash if present */
+	{
+		const char *query_ptr = strchr(basename, '?');
+		const char *hash_ptr = strchr(basename, '#');
+		const char *end_ptr = basename + strlen(basename);
+
+		if (query_ptr && query_ptr < end_ptr)
+			end_ptr = query_ptr;
+		if (hash_ptr && hash_ptr < end_ptr)
+			end_ptr = hash_ptr;
+
+		basename_len = end_ptr - basename;
+	}
+	if (basename_len == 0)
+		return "main.js";
+
+	for (allowed_index = 0; allowed[allowed_index]; allowed_index++) {
+		if (strlen(allowed[allowed_index]) == basename_len &&
+			strncmp(allowed[allowed_index], basename, basename_len) == 0)
+			return allowed[allowed_index];
+	}
+
+	return "main.js";
+}
+
 static void js_handler(enum httpd_uri_handler_status status,
 	struct httpd_request *request,
 	struct httpd_response *response)
 {
 	if (status == HTTP_CB_NEW) {
 		const char *uri = request && request->urih ? request->urih->uri : NULL;
-		const char *file = "main.js";
-
-		if (uri && strstr(uri, "i18n.js"))
-			file = "i18n.js";
-		else if (uri && strstr(uri, "themeloader.js"))
-			file = "themeloader.js";
+		const char *file = select_js_file(uri);
 
 		output_plain_file(response, file);
 		response->info.content_type = "text/javascript";
@@ -800,20 +974,45 @@ static void html_handler(enum httpd_uri_handler_status status,
 }
 
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
+static void append_mtdlayout_label(char *buf, size_t size, const char *label)
+{
+	size_t len;
+
+	if (!label || !label[0])
+		return;
+
+	len = strlen(buf);
+	if (len >= size - 1)
+		return;
+
+	snprintf(buf + len, size - len, "%s;", label);
+}
+
 static const char *get_mtdlayout_str(void)
 {
 	static char mtd_layout_str[MTD_LAYOUTS_MAXLEN];
+	const char *custom_parts = env_get(MTD_LAYOUT_CUSTOM_ENV);
 	ofnode node, layout;
+	bool custom_seen = false;
 
-	sprintf(mtd_layout_str, "%s;", get_mtd_layout_label());
+	snprintf(mtd_layout_str, sizeof(mtd_layout_str), "%s;",
+		 get_mtd_layout_label());
 
 	node = ofnode_path("/mtd-layout");
 	if (ofnode_valid(node) && ofnode_get_child_count(node)) {
 		ofnode_for_each_subnode(layout, node) {
-			strcat(mtd_layout_str, ofnode_read_string(layout, "label"));
-			strcat(mtd_layout_str, ";");
+			const char *label = ofnode_read_string(layout, "label");
+
+			if (label && !strcmp(label, MTD_LAYOUT_CUSTOM_LABEL))
+				custom_seen = true;
+			append_mtdlayout_label(mtd_layout_str,
+					       sizeof(mtd_layout_str), label);
 		}
 	}
+
+	if (custom_parts && custom_parts[0] && !custom_seen)
+		append_mtdlayout_label(mtd_layout_str, sizeof(mtd_layout_str),
+				       MTD_LAYOUT_CUSTOM_LABEL);
 
 	return mtd_layout_str;
 }
@@ -831,7 +1030,59 @@ static void mtd_layout_handler(enum httpd_uri_handler_status status,
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	response->data = get_mtdlayout_str();
 #else
-	response->data = "error";
+	{
+		const char *custom = env_get(MTD_LAYOUT_CUSTOM_ENV);
+		bool mtd_unavailable = false;
+
+#ifdef CONFIG_MTK_BOOTMENU_MMC
+		/* When MMC is present, only show MTD layout if there
+		 * is genuine MTD hardware or runtime evidence:
+		 *  - /mtd-layout OF node exists
+		 *  - mtd_layout_custom env is set (user-configured)
+		 *  - mtdparts / mtdids env is set (MTD was probed)
+		 * Otherwise return an empty body so the frontend
+		 * hides the MTD section on MMC-only devices.
+		 */
+		if (failsafe_mmc_present()) {
+			bool has_mtd = false;
+			ofnode node = ofnode_path("/mtd-layout");
+
+			if (ofnode_valid(node)) {
+				has_mtd = true;
+			} else if (custom && custom[0]) {
+				has_mtd = true;
+			} else {
+				const char *mtdparts = env_get("mtdparts");
+				const char *mtdids = env_get("mtdids");
+
+				if ((mtdparts && mtdparts[0]) ||
+				    (mtdids && mtdids[0]))
+					has_mtd = true;
+			}
+
+			if (!has_mtd)
+				mtd_unavailable = true;
+		}
+#endif
+
+		if (mtd_unavailable) {
+			response->data = "";
+		} else if (custom && custom[0]) {
+			static char single_str[64];
+			const char *cur = env_get("mtd_layout");
+
+			if (!cur || !cur[0])
+				cur = env_get("mtd_layout_label");
+			if (!cur || strcmp(cur, MTD_LAYOUT_CUSTOM_LABEL))
+				cur = "default";
+
+			snprintf(single_str, sizeof(single_str),
+				 "%s;default;%s;", cur, MTD_LAYOUT_CUSTOM_LABEL);
+			response->data = single_str;
+		} else {
+			response->data = ";";
+		}
+	}
 #endif
 
 	response->size = strlen(response->data);
@@ -879,20 +1130,18 @@ int start_web_failsafe(void)
 	httpd_register_uri_handler(inst, "/reboot-failsafe", &reboot_failsafe_handler, NULL);
 	httpd_register_uri_handler(inst, "/reboot.html", &html_handler, NULL);
 	httpd_register_uri_handler(inst, "/sysinfo", &sysinfo_handler, NULL);
-#ifdef CONFIG_WEBUI_FAILSAFE_UI_NEW
-	httpd_register_uri_handler(inst, "/favicon.svg", &picture_handler, NULL);
-	httpd_register_uri_handler(inst, "/themeloader.js", &js_handler, NULL);
-#endif
 #ifdef CONFIG_WEBUI_FAILSAFE_I18N
 	httpd_register_uri_handler(inst, "/i18n.js", &js_handler, NULL);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_BACKUP
 	httpd_register_uri_handler(inst, "/backup.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/backup_js.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/backup/info", &backupinfo_handler, NULL);
 	httpd_register_uri_handler(inst, "/backup/main", &backup_handler, NULL);
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_FLASH
 	httpd_register_uri_handler(inst, "/flash.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/flash_js.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/flash/read", &flash_handler, NULL);
 	httpd_register_uri_handler(inst, "/flash/write", &flash_handler, NULL);
 	httpd_register_uri_handler(inst, "/flash/erase", &flash_handler, NULL);
@@ -900,15 +1149,20 @@ int start_web_failsafe(void)
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_ENV
 	httpd_register_uri_handler(inst, "/env.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/env_js.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/list", &env_list_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/set", &env_set_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/unset", &env_unset_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/reset", &env_reset_handler, NULL);
 	httpd_register_uri_handler(inst, "/env/restore", &env_restore_handler, NULL);
-#ifdef CONFIG_WEBUI_FAILSAFE_UI_NEW
+#endif
+#ifdef CONFIG_WEBUI_FAILSAFE_UI_BOOTSTRAP
+	httpd_register_uri_handler(inst, "/favicon.svg", &picture_handler, NULL);
+	httpd_register_uri_handler(inst, "/settings.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/settings_js.js", &js_handler, NULL);
+	httpd_register_uri_handler(inst, "/theme.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/theme/get", &theme_get_handler, NULL);
 	httpd_register_uri_handler(inst, "/theme/set", &theme_set_handler, NULL);
-#endif
 #endif
 #ifdef CONFIG_WEBUI_FAILSAFE_SIMG
 	httpd_register_uri_handler(inst, "/simg.html", &html_handler, NULL);
@@ -920,20 +1174,39 @@ int start_web_failsafe(void)
 	/* Enable recording early so we can stream output to the browser */
 	failsafe_webconsole_ensure_recording();
 	httpd_register_uri_handler(inst, "/console.html", &html_handler, NULL);
+	httpd_register_uri_handler(inst, "/console_js.js", &js_handler, NULL);
 	httpd_register_uri_handler(inst, "/console/poll", &webconsole_poll_handler, NULL);
 	httpd_register_uri_handler(inst, "/console/exec", &webconsole_exec_handler, NULL);
 	httpd_register_uri_handler(inst, "/console/clear", &webconsole_clear_handler, NULL);
 #endif
 
-	if (IS_ENABLED(CONFIG_MTK_DHCPD))
-		mtk_dhcpd_start();
+	if (IS_ENABLED(CONFIG_MTK_TELNETD)) {
+		const char *enable_str = env_get("telnet_enable");
+		const char *port_str = env_get("telnet_port");
+		unsigned long port = 23;
+		bool enable = true;
+
+		/* Check if telnet is explicitly disabled */
+		if (enable_str) {
+			if (!strcmp(enable_str, "0") || !strcasecmp(enable_str, "false") ||
+			    !strcasecmp(enable_str, "no") || !strcasecmp(enable_str, "off")) {
+				enable = false;
+			}
+		}
+
+		if (enable) {
+			if (port_str) {
+				port = simple_strtoul(port_str, NULL, 10);
+				if (port < 1 || port > 65535)
+					port = 23;
+			}
+			mtk_telnetd_start((u16)port);
+		}
+	}
 
 	failsafe_httpd_running = true;
 	net_loop(MTK_TCP);
 	failsafe_httpd_running = false;
-
-	if (IS_ENABLED(CONFIG_MTK_DHCPD))
-		mtk_dhcpd_stop();
 
 	return 0;
 }
@@ -945,8 +1218,13 @@ static int do_httpd(struct cmd_tbl *cmdtp, int flag, int argc,
 	int ret;
 
 #ifdef CONFIG_NET_FORCE_IPADDR
-	net_ip = string_to_ip(CONFIG_IPADDR);
-	net_netmask = string_to_ip(CONFIG_NETMASK);
+	{
+		const char *env_ip = env_get("ipaddr");
+		const char *env_nm = env_get("netmask");
+
+		net_ip = string_to_ip((env_ip && env_ip[0]) ? env_ip : CONFIG_IPADDR);
+		net_netmask = string_to_ip((env_nm && env_nm[0]) ? env_nm : CONFIG_NETMASK);
+	}
 #endif
 	local_ip = ntohl(net_ip.s_addr);
 

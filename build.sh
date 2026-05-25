@@ -8,10 +8,11 @@ TOOLCHAIN_AARCH64=aarch64-linux-gnu-
 # Default selection
 VERSION=${VERSION:-2025}
 VARIANT=${VARIANT:-default}
-FSTHEME=${FSTHEME:-new}
+FSTHEME=${FSTHEME:-bootstrap}
 fixedparts=${FIXED_MTDPARTS:-1}
 multilayout=${MULTI_LAYOUT:-0}
 simg=${SIMG:-0}
+COPY_BL2=${COPY_BL2:-1}
 
 if [ "$VERSION" = "2022" ]; then
     UBOOT_DIR=uboot-mtk-20220606
@@ -277,6 +278,7 @@ echo "ATF CFG: $ATF_CFG_PATH"
 echo "U-Boot CFG: $UBOOT_CFG_PATH"
 echo "Features: fixed-mtdparts: $fixedparts, multi-layout: $multilayout"
 echo "Failsafe: theme: $FSTHEME, simg support: $simg"
+echo "COPY BL2: $COPY_BL2"
 
 echo "======================================================================"
 echo "Build u-boot..."
@@ -293,8 +295,8 @@ if [ -n "$VARIANT" ]; then
 	echo "Build u-boot with variant: $VARIANT"
 	echo "CONFIG_WEBUI_FAILSAFE_BUILD_VARIANT=\"$(echo "$VARIANT" | tr '[:upper:]' '[:lower:]')\"" >> "$UBOOT_DIR/.config"
 fi
-if [ "$FSTHEME" = "new" ] || [ "$FSTHEME" = "NEW" ]; then
-	echo "Build u-boot with new fstheme!"
+if [ "$FSTHEME" = "bootstrap" ] || [ "$FSTHEME" = "Bootstrap" ]; then
+	echo "Build u-boot with bootstrap fstheme!"
 fi
 if [ "$FSTHEME" = "gl" ] || [ "$FSTHEME" = "GL" ]; then
 	echo "Build u-boot with gl fstheme!"
@@ -371,9 +373,9 @@ if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
 	fi
 	FIP_MD5=$(md5sum "$ATF_DIR/build/${SOC}/release/fip.bin" | awk '{print $1}')
 	FIP_NAME="${FIP_NAME}_md5-${FIP_MD5}"
+	echo "fip-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
 	echo "fip.bin md5sum: $FIP_MD5"
 	cp -f "$ATF_DIR/build/${SOC}/release/fip.bin" "output/${FIP_NAME}.bin"
-	echo "fip-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
 	echo "Output: output/${FIP_NAME}.bin"
 else
 	echo "fip build fail!"
@@ -393,10 +395,15 @@ if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
 		fi
 		BL2_MD5=$(md5sum "$ATF_DIR/build/${SOC}/release/bl2.img" | awk '{print $1}')
 		BL2_NAME="${BL2_NAME}_md5-${BL2_MD5}"
-		echo "bl2.img md5sum: $BL2_MD5"
-		cp -f "$ATF_DIR/build/${SOC}/release/bl2.img" "output/${BL2_NAME}.img"
 		echo "bl2-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
-		echo "Output: output/${BL2_NAME}.img"
+		echo "bl2.img md5sum: $BL2_MD5"
+		if [ "$COPY_BL2" = "1" ]; then
+			cp -f "$ATF_DIR/build/${SOC}/release/bl2.img" "output/${BL2_NAME}.img"
+			echo "Output: output/${BL2_NAME}.img"
+		else
+			echo "Skipping bl2 copy because COPY_BL2 is disabled"
+			echo "You may find the bl2 image at: $ATF_DIR/build/${SOC}/release/bl2.img"
+		fi
 	else
 		echo "bl2 build fail!"
 		exit 1
