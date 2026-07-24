@@ -6,6 +6,7 @@ config WEBUI_FAILSAFE
 	bool "Enable Failsafe Web UI"
 	select MTK_TCP
 	select MTK_HTTPD
+	select MTK_DHCPD
 	default n
 	help
 	  Enable Web based failsafe UI
@@ -73,6 +74,19 @@ config WEBUI_FAILSAFE_BACKUP
 	help
 	  Enable backup download functionality in the failsafe Web UI.
 
+config WEBUI_FAILSAFE_NAND_RAW
+	bool "Enable NAND raw/OOB backup and flash (DANGEROUS)"
+	default n
+	depends on WEBUI_FAILSAFE_ADVANCED && MTD
+	help
+	  Enable NAND raw mode in backup and flash editor that reads/writes
+	  pages including OOB (Out-Of-Band) spare area data via MTD_OPS_RAW.
+
+	  This preserves ECC layout and is required for byte-exact NAND dumps.
+
+	  WARNING: Raw mode requires significantly more memory (page_size +
+	  oob_size per page) and is only available on NAND flash devices.
+
 config WEBUI_FAILSAFE_FLASH
 	bool "Enable flash editor (DANGEROUS)"
 	default y
@@ -80,6 +94,16 @@ config WEBUI_FAILSAFE_FLASH
 	help
 	  Enable flash editor in the failsafe Web UI for reading/writing
 	  arbitrary storage ranges and restoring backup files.
+
+	  WARNING: This is a dangerous feature and may brick the device.
+
+config WEBUI_FAILSAFE_GPT
+	bool "Enable GPT partition table update"
+	default y if MTK_BOOTMENU_MMC
+	depends on WEBUI_FAILSAFE && MTK_BOOTMENU_MMC
+	help
+	  Enable GPT partition table update in the failsafe Web UI.
+	  This allows update of the GPT partition table from a file upload.
 
 	  WARNING: This is a dangerous feature and may brick the device.
 
@@ -120,6 +144,15 @@ config WEBUI_FAILSAFE_ENV_DEFAULT_GLBTN_KEY
 	  When enabled, failsafe environment API will automatically create
 	  and persist glbtn_key=reset,wps,mesh if glbtn_key does not exist.
 	  Existing glbtn_key values are never overwritten.
+
+config WEBUI_FAILSAFE_UBI
+	bool "Enable UBI volume management"
+	default n
+	select CMD_UBIFS
+	depends on WEBUI_FAILSAFE_ADVANCED && !MTK_BOOTMENU_MMC
+	help
+	  Enable UBI volume management in the failsafe Web UI.
+	  This allows managing UBI volumes on NAND flash devices.
 
 config WEBUI_FAILSAFE_CONSOLE
 	bool "Enable failsafe Web console (DANGEROUS)"

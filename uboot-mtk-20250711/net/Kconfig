@@ -226,6 +226,15 @@ config MTK_TCP
 	help
 	  Enable mediatek tcp framework that allows some customized features.
 
+config MTK_TCP_VERBOSE
+	bool "Enable verbose logging for MTK TCP stack"
+	default n
+	depends on MTK_TCP
+	help
+	  Enable verbose debug logging for the MTK TCP stack. This can be
+	  overridden at runtime using the "mtk_tcp_verbose" environment variable.
+	  Set the variable to "1", "true", "yes", or "on" to enable logging.
+
 config MTK_HTTPD
 	bool
 	default n
@@ -235,7 +244,7 @@ config MTK_HTTPD
 
 config MTK_TELNETD
 	bool "Minimal telnet server for MediaTek web failsafe"
-	default y
+	default n
 	depends on MTK_TCP
 	select CONSOLE_RECORD
 	help
@@ -246,8 +255,8 @@ config MTK_TELNETD
 
 config MTK_DHCPD
 	bool "Minimal DHCP server for MediaTek web failsafe"
-	default y
-	depends on MTK_HTTPD
+	default n
+	depends on MTK_TCP
 	help
 	  Enable a minimal DHCPv4 server that answers DHCPDISCOVER/DHCPREQUEST
 	  while the MediaTek web failsafe UI (httpd) is running.
@@ -274,15 +283,6 @@ config MTK_DHCPD_POOL_SIZE
 	depends on MTK_DHCPD_USE_CONFIG_IP
 	help
 	  Pool size, e.g. 101 means .100 ~ .200.
-
-config MTK_DHCPD_ENHANCED
-	bool "Enhanced DHCP server behavior"
-	default y
-	depends on MTK_DHCPD
-	help
-	  Enable enhanced DHCPREQUEST validation and stable IP allocation.
-	  Adds Server Identifier checks, DHCPNAK support, and hash-based pool
-	  allocation with collision avoidance.
 
 config NET_FORCE_IPADDR
 	bool "Use ipaddr and netmask with CONFIG_IPADDR and CONFIG_NETMASK"

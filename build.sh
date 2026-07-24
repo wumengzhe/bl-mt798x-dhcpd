@@ -1,9 +1,20 @@
 #!/bin/sh
+# ============================================================================
+# build.sh - Main build script for MediaTek MT798x platforms (ATF + U-Boot)
+#
+#   Run './build.sh --help' for full usage information.
+# ============================================================================
 
 AUTHOR="Yuzhii"
 
 TOOLCHAIN_ARM=arm-linux-gnueabi-
 TOOLCHAIN_AARCH64=aarch64-linux-gnu-
+
+# ATF directory and uboot directory names
+ATF24=atf-20240117-bacca82a8
+ATF25=atf-20250711
+ATF26=atf-20260123
+UBOOT25=uboot-mtk-20250711
 
 # Default selection
 VERSION=${VERSION:-2025}
@@ -12,86 +23,108 @@ FSTHEME=${FSTHEME:-bootstrap}
 fixedparts=${FIXED_MTDPARTS:-1}
 multilayout=${MULTI_LAYOUT:-0}
 simg=${SIMG:-0}
+UBIMNG=${UBIMNG:-0}
+TELNETD=${TELNETD:-0}
+NAND_RAW=${NAND_RAW:-0}
 COPY_BL2=${COPY_BL2:-1}
+clean_mode=0
 
-if [ "$VERSION" = "2022" ]; then
-    UBOOT_DIR=uboot-mtk-20220606
-    ATF_DIR=atf-20220606-637ba581b
-elif [ "$VERSION" = "2023" ]; then
-    UBOOT_DIR=uboot-mtk-20230718-09eda825
-    ATF_DIR=atf-20231013-0ea67d76a
-elif [ "$VERSION" = "2024" ]; then
-    UBOOT_DIR=uboot-mtk-20230718-09eda825
-    ATF_DIR=atf-20240117-bacca82a8
-elif [ "$VERSION" = "2025" ]; then
-    UBOOT_DIR=uboot-mtk-20250711
-    ATF_DIR=atf-20250711
-elif [ "$VERSION" = "2026" ]; then
-    UBOOT_DIR=uboot-mtk-20260123
-    ATF_DIR=atf-20260123
+print_help() {
+	cat <<EOF
+build.sh - Build ATF + U-Boot for MediaTek MT798x platforms
+
+Usage:
+  BOARD=<board> [OPTIONS] ./build.sh
+  ./build.sh --clean
+  ./build.sh --help
+
+Required:
+  BOARD               Target board name (e.g. cmcc_a10, sn_r1)
+
+Optional:
+  SOC                 SoC: mt7981 | mt7986 | mt7987 | mt7988 (auto-detected if omitted)
+  VERSION             Firmware version: 2025 | SP1 | SP2        (default: 2025)
+  VARIANT             Build variant: default | ubootmod | ubi | nonmbm | openwrt
+                      (default: default)
+  FSTHEME             Failsafe UI theme: bootstrap | gl | mtk   (default: bootstrap)
+  FIXED_MTDPARTS      Enable fixed MTD partitions: 0 | 1        (default: 1)
+  MULTI_LAYOUT        Enable multi MTD layout: 0 | 1            (default: 0)
+  SIMG                Enable failsafe SIMG support: 0 | 1       (default: 0)
+  UBIMNG              Enable failsafe UBI management: 0 | 1     (default: 0)
+  TELNETD             Enable telnetd: 0 | 1                     (default: 0)
+  NAND_RAW            Enable NAND raw OOB backup: 0 | 1          (default: 0)
+  COPY_BL2            Copy bl2.img to output/: 0 | 1            (default: 1)
+
+Options:
+  --clean, -c         Distclean all source directories and exit
+  --help, -h          Show this help message and exit
+EOF
+	exit 0
+}
+
+case "${1:-}" in
+	--help|-h) print_help ;;
+	--clean|-c) clean_mode=1 ;;
+esac
+
+if [ "$VERSION" = "2025" ]; then
+    UBOOT_DIR=$UBOOT25
+    ATF_DIR=$ATF25
 elif [ "$VERSION" = "SP1" ] || [ "$VERSION" = "sp1" ]; then
 	VERSION="SP1"
-    UBOOT_DIR=uboot-mtk-20250711
-    ATF_DIR=atf-20240117-bacca82a8
+    UBOOT_DIR=$UBOOT25
+    ATF_DIR=$ATF24
 elif [ "$VERSION" = "SP2" ] || [ "$VERSION" = "sp2" ]; then
 	VERSION="SP2"
-    UBOOT_DIR=uboot-mtk-20250711
-    ATF_DIR=atf-20260123
+    UBOOT_DIR=$UBOOT25
+    ATF_DIR=$ATF26
 else
-    echo "Error: Unsupported VERSION. Please specify VERSION=2025/SP1/SP2."
+	echo "Error: Unsupported VERSION. Please specify VERSION=2025/SP1/SP2."
     exit 1
 fi
 
-if [ "$CLEAN" = "1" ]; then
-	if [ -f "$UBOOT_DIR/.config" ]; then
-		echo "Cleaning $UBOOT_DIR"
-		cd "$UBOOT_DIR"
-		make distclean
-		cd ..
-	else
-		echo "$UBOOT_DIR/.config does not exist."
-	fi
-    if [ -d "$ATF_DIR/build" ]; then
-		echo "Cleaning $ATF_DIR" 
-		cd "$ATF_DIR"
-		make distclean
-		cd ..
-    else
-        echo "$ATF_DIR/build does not exist."
-    fi
+if [ "$clean_mode" = "1" ]; then
+	for dir in "$UBOOT_DIR" "$ATF24" "$ATF25" "$ATF26"; do
+		if [ -d "$dir" ]; then
+			echo "Cleaning $dir"
+			(
+				cd "$dir" && make distclean
+			)
+		else
+			echo "$dir does not exist."
+		fi
+	done
+
 	echo "Clean done."
     exit 0
 fi
 
 if [ -z "$BOARD" ]; then
-	echo "Usage: BOARD=<board name> [SOC=mt7981|mt7986|mt7987|mt7988] VERSION=[2022|2023|2024|2025] VARIANT=[default|ubootmod|nonmbm] $0"
-	echo "eg: BOARD=cmcc_a10 $0"
-	echo "eg: BOARD=cmcc_a10 VARIANT=ubootmod $0"
-	echo "eg: BOARD=sn_r1 VERSION=2025 $0"
-	echo "eg: SOC=mt7981 BOARD=cmcc_a10 $0"
+	echo "Error: BOARD is required. Run '$0 --help' for usage information."
 	exit 1
 fi
 
 # Config Dir
 CONFIGS_DIR_DEFAULT="configs"
 CONFIGS_DIR_FIT="configs-fit"
+CONFIGS_DIR_UBI="configs-ubi"
 CONFIGS_DIR_OPENWRT="configs-openwrt"
 CONFIGS_DIR_NONMBM="configs-nonmbm"
 
 detect_soc() {
 	matched=""
-	for dir in "$UBOOT_DIR/$CONFIGS_DIR_DEFAULT" "$UBOOT_DIR/$CONFIGS_DIR_FIT" "$UBOOT_DIR/$CONFIGS_DIR_NONMBM" "$UBOOT_DIR/$CONFIGS_DIR_OPENWRT"; do
-		[ -d "$dir" ] || continue
+	for dir in "$UBOOT_DIR/$CONFIGS_DIR_DEFAULT" "$UBOOT_DIR/$CONFIGS_DIR_FIT" "$UBOOT_DIR/$CONFIGS_DIR_UBI" "$UBOOT_DIR/$CONFIGS_DIR_NONMBM" "$UBOOT_DIR/$CONFIGS_DIR_OPENWRT"; do
+			[ -d "$dir" ] || continue
 		for file in "$dir"/*_"$BOARD"_defconfig "$dir"/*_"$BOARD"_multi_layout_defconfig; do
-			[ -f "$file" ] || continue
-			base=$(basename "$file")
+					[ -f "$file" ] || continue
+					base=$(basename "$file")
 			soc=${base%%_"$BOARD"_defconfig}
-			if [ "$base" = "$soc" ]; then
+					if [ "$base" = "$soc" ]; then
 				soc=${base%%_"$BOARD"_multi_layout_defconfig}
-			fi
-			matched="$matched $soc"
-		done
-	done
+					fi
+					matched="$matched $soc"
+				done
+			done
 
 	unique=""
 	for s in $matched; do
@@ -135,6 +168,36 @@ echo "======================================================================"
 echo "Checking environment..."
 echo "======================================================================"
 
+echo "Trying npm..."
+command -v npm
+[ "$?" != "0" ] && { echo "Error: npm is not installed on this system."; exit 0; }
+
+ensure_failsafe_js_deps() {
+	failsafe_dir="$UBOOT_DIR/failsafe"
+	embed_dir="$failsafe_dir/embedded"
+	package_json="$embed_dir/package.json"
+	marker="$embed_dir/.npm-install-done"
+
+	if [ ! -f "$package_json" ]; then
+		echo "Skipping failsafe JS dependency setup: $package_json not found."
+		return 0
+	fi
+
+	if [ -f "$marker" ] && [ -d "$embed_dir/node_modules/uglify-js" ]; then
+		echo "Failsafe JS build dependencies already installed."
+		return 0
+	fi
+
+	command -v npm >/dev/null 2>&1 || { echo "Error: npm is not installed on this system."; exit 1; }
+	echo "Installing failsafe JS build dependencies..."
+	(cd "$embed_dir" && npm install --no-audit --no-fund) || exit 1
+	touch "$marker"
+	echo "Failsafe JS build dependencies installed."
+}
+
+echo "npm found, checking failsafe JS dependencies..."
+ensure_failsafe_js_deps
+
 echo "Trying python3..."
 command -v python3
 [ "$?" != "0" ] && { echo "Error: Python3 is not installed on this system."; exit 0; }
@@ -165,6 +228,7 @@ UBOOT_CFG_MULTILAYOUT="${UBOOT_CFG_MULTILAYOUT:-$UBOOT_CFG_MULTILAYOUT_SOURCE}"
 # ATF Config Path
 ATF_CFG_PATH_DEFAULT="$ATF_DIR/$CONFIGS_DIR_DEFAULT/$ATF_CFG"
 ATF_CFG_PATH_FIT="$ATF_DIR/$CONFIGS_DIR_FIT/$ATF_CFG"
+ATF_CFG_PATH_UBI="$ATF_DIR/$CONFIGS_DIR_UBI/$ATF_CFG"
 ATF_CFG_PATH_OPENWRT="$ATF_DIR/$CONFIGS_DIR_OPENWRT/$ATF_CFG"
 ATF_CFG_PATH_NONMBM="$ATF_DIR/$CONFIGS_DIR_NONMBM/$ATF_CFG"
 
@@ -172,6 +236,7 @@ ATF_CFG_PATH_NONMBM="$ATF_DIR/$CONFIGS_DIR_NONMBM/$ATF_CFG"
 UBOOT_CFG_PATH_DEFAULT="$UBOOT_DIR/$CONFIGS_DIR_DEFAULT/$UBOOT_CFG"
 UBOOT_CFG_PATH_MULTILAYOUT="$UBOOT_DIR/$CONFIGS_DIR_DEFAULT/$UBOOT_CFG_MULTILAYOUT"
 UBOOT_CFG_PATH_FIT="$UBOOT_DIR/$CONFIGS_DIR_FIT/$UBOOT_CFG"
+UBOOT_CFG_PATH_UBI="$UBOOT_DIR/$CONFIGS_DIR_UBI/$UBOOT_CFG"
 UBOOT_CFG_PATH_OPENWRT="$UBOOT_DIR/$CONFIGS_DIR_OPENWRT/$UBOOT_CFG"
 UBOOT_CFG_PATH_NONMBM="$UBOOT_DIR/$CONFIGS_DIR_NONMBM/$UBOOT_CFG"
 UBOOT_CFG_PATH_NONMBM_MULTILAYOUT="$UBOOT_DIR/$CONFIGS_DIR_NONMBM/$UBOOT_CFG_MULTILAYOUT"
@@ -196,10 +261,25 @@ if [ "$VARIANT" = "default" ] || [ "$VARIANT" = "DEFAULT" ]; then
 	fi
 elif [ "$VARIANT" = "ubootmod" ] || [ "$VARIANT" = "UBOOTMOD" ]; then
 	fixedparts=0
-	ATF_CFG_PATH=$ATF_CFG_PATH_FIT
+	ATF_CFG_PATH=$ATF_CFG_PATH_DEFAULT
 	UBOOT_CFG_PATH=$UBOOT_CFG_PATH_FIT
 	if [ "$multilayout" = "1" ]; then
 		echo "Warning: No multi layout with ubootmod variant, will disabled it.(Y/n):"
+		if [ "$SILENT" != "Y" ]; then
+			read answer
+		fi
+		if [ "$answer" = "y" ] || [ "$answer" = "Y" ] || [ "$SILENT" = "Y" ]; then
+			multilayout=0
+		else
+			echo "Canceled."
+		fi
+	fi
+elif [ "$VARIANT" = "ubi" ] || [ "$VARIANT" = "UBI" ]; then
+	fixedparts=0
+	ATF_CFG_PATH=$ATF_CFG_PATH_UBI
+	UBOOT_CFG_PATH=$UBOOT_CFG_PATH_UBI
+	if [ "$multilayout" = "1" ]; then
+		echo "Warning: No multi layout with ubi variant, will disabled it.(Y/n):"
 		if [ "$SILENT" != "Y" ]; then
 			read answer
 		fi
@@ -243,7 +323,7 @@ elif [ "$VARIANT" = "nonmbm" ] || [ "$VARIANT" = "NONMBM" ]; then
 		fi
 	fi
 else
-    echo "Error: Unsupported VARIANT. Please specify VARIANT=default/multilayou/ubootmod/nonmbm."
+    echo "Error: Unsupported VARIANT. Please specify VARIANT=default/ubootmod/ubi/nonmbm/openwrt."
     exit 1
 fi
 
@@ -277,7 +357,9 @@ echo "U-Boot Dir: $UBOOT_DIR"
 echo "ATF CFG: $ATF_CFG_PATH"
 echo "U-Boot CFG: $UBOOT_CFG_PATH"
 echo "Features: fixed-mtdparts: $fixedparts, multi-layout: $multilayout"
-echo "Failsafe: theme: $FSTHEME, simg support: $simg"
+echo "Failsafe theme: $FSTHEME"
+echo "Failsafe functions: SIMG support: $simg, UBI Management support: $UBIMNG"
+echo "Telnetd support: $TELNETD, NAND RAW R/W support: $NAND_RAW"
 echo "COPY BL2: $COPY_BL2"
 
 echo "======================================================================"
@@ -309,6 +391,18 @@ fi
 if [ "$simg" = "1" ]; then
 	echo "Build u-boot with failsafe simg support!"
 	echo "CONFIG_WEBUI_FAILSAFE_SIMG=y" >> "$UBOOT_DIR/.config"
+fi
+if [ "$UBIMNG" = "1" ]; then
+	echo "Build u-boot with failsafe UBI management support!"
+	echo "CONFIG_WEBUI_FAILSAFE_UBI=y" >> "$UBOOT_DIR/.config"
+fi
+if [ "$TELNETD" = "1" ]; then
+	echo "Build u-boot with telnetd support!"
+	echo "CONFIG_MTK_TELNETD=y" >> "$UBOOT_DIR/.config"
+fi
+if [ "$NAND_RAW" = "1" ]; then
+	echo "Build u-boot with NAND raw OOB backup support!"
+	echo "CONFIG_WEBUI_FAILSAFE_NAND_RAW=y" >> "$UBOOT_DIR/.config"
 fi
 
 make -C "$UBOOT_DIR" olddefconfig
@@ -359,6 +453,9 @@ if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
 	if [ "$VARIANT" = "ubootmod" ] || [ "$VARIANT" = "UBOOTMOD" ]; then
 		FIP_NAME="${FIP_NAME}-fit"
 	fi
+	if [ "$VARIANT" = "ubi" ] || [ "$VARIANT" = "UBI" ]; then
+		FIP_NAME="${FIP_NAME}-ubi"
+	fi
 	if [ "$VARIANT" = "openwrt" ] || [ "$VARIANT" = "OPENWRT" ]; then
 		FIP_NAME="${FIP_NAME}-openwrt"
 	fi
@@ -375,6 +472,7 @@ if [ -f "$ATF_DIR/build/${SOC}/release/fip.bin" ]; then
 	FIP_NAME="${FIP_NAME}_md5-${FIP_MD5}"
 	echo "fip-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
 	echo "fip.bin md5sum: $FIP_MD5"
+	echo "fip.bin size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/fip.bin") bytes"
 	cp -f "$ATF_DIR/build/${SOC}/release/fip.bin" "output/${FIP_NAME}.bin"
 	echo "Output: output/${FIP_NAME}.bin"
 else
@@ -387,6 +485,9 @@ if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
 		if [ "$VARIANT" = "ubootmod" ] || [ "$VARIANT" = "UBOOTMOD" ]; then
 			BL2_NAME="${BL2_NAME}-fit"
 		fi
+		if [ "$VARIANT" = "ubi" ] || [ "$VARIANT" = "UBI" ]; then
+			BL2_NAME="${BL2_NAME}-ubi"
+		fi
 		if [ "$VARIANT" = "openwrt" ] || [ "$VARIANT" = "OPENWRT" ]; then
 			BL2_NAME="${BL2_NAME}-openwrt"
 		fi
@@ -397,6 +498,7 @@ if grep -Eq "(^_|CONFIG_TARGET_ALL_NO_SEC_BOOT=y)" "$ATF_CFG_PATH"; then
 		BL2_NAME="${BL2_NAME}_md5-${BL2_MD5}"
 		echo "bl2-${SOC}_${BOARD}_${VERSION}_${VARIANT} build done"
 		echo "bl2.img md5sum: $BL2_MD5"
+		echo "bl2.img size: $(stat -c%s "$ATF_DIR/build/${SOC}/release/bl2.img") bytes"
 		if [ "$COPY_BL2" = "1" ]; then
 			cp -f "$ATF_DIR/build/${SOC}/release/bl2.img" "output/${BL2_NAME}.img"
 			echo "Output: output/${BL2_NAME}.img"

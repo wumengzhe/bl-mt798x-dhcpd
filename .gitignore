@@ -17,6 +17,8 @@
 .config.old
 .mconf-cfg
 *.configs
+boards.kconfig
+.tmp.defconfig
 asm-offsets.s
 lib.a
 httpd-fsdata.c
@@ -39,6 +41,13 @@ mt798x_simg/*
 unopen/*
 migration_*/
 migration*.py
+ptgen
 
 # Toolchain
 openwrt-toolchain*
+node_modules/
+
+# Upstream
+u-boot-*/
+mtk-*/
+*.zip

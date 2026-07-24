@@ -1,4 +1,67 @@
 #!/bin/sh
+# ============================================================================
+# compile_atf.sh - Batch compile ATF BL2 images for MediaTek MT798x platforms
+#
+#   Run './compile_atf.sh --help' for full usage information.
+# ============================================================================
+
+print_help() {
+	cat <<EOF
+compile_atf.sh - Batch compile ATF (ARM Trusted Firmware) BL2 images
+                 for MediaTek MT798x platforms
+
+Usage:
+  ./compile_atf.sh [CONFIG...]
+
+Description:
+  Builds ATF BL2 firmware images for config files under ATFCFG_DIR.
+  Without arguments, all .config files are built.  Specify one or more
+  config names to build only those configs.
+
+Arguments:
+  CONFIG              Config name(s) to build (optional).
+                      Can be a plain name (e.g. "mt7981-ddr3-bga-ram"
+                      matches "mt798x_atf/mt7981-ddr3-bga-ram.config")
+                      or a relative sub-path (e.g. "mt7986/mt7986-ddr3-ram"
+                      matches "mt798x_atf/mt7986/mt7986-ddr3-ram.config").
+                      Multiple names may be given.  .config suffix is
+                      optional.
+
+Optional:
+  VERSION             Firmware version: 2025 | SP1 | SP2        (default: 2025)
+  ATFCFG_DIR          Config source directory                   (default: mt798x_atf)
+  CFG_SUBDIR          Subdirectory under ATFCFG_DIR for extra   (default: empty)
+                      configs (e.g. "normal")
+  OUTPUT_DIR          Output directory for built images         (default: output_bl2)
+  VARIANT             Apply variant options: nonmbm | ubootmod | ubi
+                      - nonmbm   → NAND_SKIP_BAD=y
+                      - ubootmod → NAND_UBI=y
+                      - ubi      → NAND_UBI=y
+  OC7981              MT7981 overclock ARMPLL freq: 13~18       (1300~1800 MHz)
+  OC7986              MT7986 overclock ARMPLL freq: 16~25       (1600~2500 MHz)
+
+Options:
+  --help, -h          Show this help message and exit
+
+Examples:
+  ./compile_atf.sh                              # Build all configs
+  ./compile_atf.sh mt7981-ddr3-bga-ram          # Build one config
+  ./compile_atf.sh mt7981-ddr3-bga-ram mt7986-ddr4-ram  # Build two configs
+  ./compile_atf.sh mt7986/mt7986-ddr3-ram       # Build from subdirectory
+  VERSION=SP2 ./compile_atf.sh normal/mt7981-ram  # With env variables
+EOF
+	exit 0
+}
+
+TARGET_CONFIGS=""
+for arg in "$@"; do
+	case "$arg" in
+		--help|-h) print_help ;;
+		*) TARGET_CONFIGS="$TARGET_CONFIGS $arg" ;;
+	esac
+done
+# Strip leading space
+TARGET_CONFIGS="${TARGET_CONFIGS# }"
 
 TOOLCHAIN_ARM=arm-linux-gnueabi-
 TOOLCHAIN_AARCH64=aarch64-linux-gnu-
@@ -10,18 +73,14 @@ OUTPUT_DIR="${OUTPUT_DIR:-output_bl2}"
 VERSION=${VERSION:-2025}
 
 if [ -z "$ATF_DIR" ]; then
-    if [ "$VERSION" = "2022" ]; then
-        ATF_DIR=atf-20220606-637ba581b
-    elif [ "$VERSION" = "2023" ]; then
-        ATF_DIR=atf-20231013-0ea67d76a
-    elif [ "$VERSION" = "2024" ]; then
-        ATF_DIR=atf-20240117-bacca82a8
-    elif [ "$VERSION" = "2025" ]; then
+    if [ "$VERSION" = "2025" ]; then
         ATF_DIR=atf-20250711
-    elif [ "$VERSION" = "2026" ]; then
+    elif [ "$VERSION" = "SP1" ] || [ "$VERSION" = "sp1" ]; then
+        ATF_DIR=atf-20240117-bacca82a8
+    elif [ "$VERSION" = "SP2" ] || [ "$VERSION" = "sp2" ]; then
         ATF_DIR=atf-20260123
     else
-        echo "Error: Unsupported VERSION. Please specify VERSION=2025/2026 or set ATF_DIR."
+        echo "Error: Unsupported VERSION. Please specify VERSION=2025/SP1/SP2 or set ATF_DIR."
         exit 1
     fi
 fi
@@ -69,8 +128,32 @@ if [ -n "$CFG_SUBDIR" ]; then
     done
 fi
 
+# Filter to requested configs when positional arguments are given.
+if [ -n "$TARGET_CONFIGS" ]; then
+    FILTERED_LIST=""
+    for target in $TARGET_CONFIGS; do
+        # Strip optional .config suffix
+        target="${target%.config}"
+        matched=0
+        for cfg_full in $CONFIG_LIST; do
+            cfg_rel="${cfg_full#"$ATFCFG_DIR"/}"
+            cfg_rel_nosuffix="${cfg_rel%.config}"
+            cfg_name_nosuffix="$(basename "$cfg_rel" .config)"
+            if [ "$target" = "$cfg_rel_nosuffix" ] || [ "$target" = "$cfg_name_nosuffix" ]; then
+                FILTERED_LIST="$FILTERED_LIST $cfg_full"
+                matched=1
+            fi
+        done
+        if [ "$matched" -eq 0 ]; then
+            echo "Error: config '$target' not found in '$ATFCFG_DIR'${CFG_SUBDIR:+ or '$ATFCFG_DIR/$CFG_SUBDIR'}"
+            exit 1
+        fi
+    done
+    CONFIG_LIST="$FILTERED_LIST"
+fi
+
 if [ -z "$CONFIG_LIST" ]; then
-    echo "Error: no .config files found in '$ATFCFG_DIR' or '$ATFCFG_DIR/$CFG_SUBDIR'"
+    echo "Error: no .config files found in '$ATFCFG_DIR'${CFG_SUBDIR:+ or '$ATFCFG_DIR/$CFG_SUBDIR'}"
     exit 1
 fi
 
@@ -129,6 +212,9 @@ for cfg_file in $CONFIG_LIST; do
         elif [ "$variant_upper" = "UBOOTMOD" ]; then
             append_unique_line "_NAND_UBI=y" "$ATF_DIR/build/.config"
             feature_tag="${feature_tag}-ubootmod"
+        elif [ "$variant_upper" = "UBI" ]; then
+            append_unique_line "_NAND_UBI=y" "$ATF_DIR/build/.config"
+            feature_tag="${feature_tag}-ubi"
         fi
 
         if [ -n "${OC7981:-}" ] && [ "$soc" = "mt7981" ]; then
@@ -171,14 +257,16 @@ for cfg_file in $CONFIG_LIST; do
         echo "Feature: NAND_SKIP_BAD enabled"
     fi
     if echo "$feature_tag" | grep -q "ubootmod"; then
-        echo "Feature: NAND_UBI enabled"
+        echo "Feature: NAND_UBI enabled (ubootmod)"
+    elif echo "$feature_tag" | grep -q "ubi"; then
+        echo "Feature: NAND_UBI enabled (ubi)"
     fi
 
     echo "======================================================================"
     echo "Build ATF with config: $cfg_name"
     echo "======================================================================"
     build_ok=1
-    if [ "$VERSION" = "2025" ] || [ "$VERSION" = "2026" ]; then
+    if [ "$VERSION" = "2025" ] || [ "$VERSION" = "SP1" ] || [ "$VERSION" = "SP2" ]; then
         make -C "$ATF_DIR" olddefconfig || build_ok=0
     else
         make -C "$ATF_DIR" defconfig || build_ok=0

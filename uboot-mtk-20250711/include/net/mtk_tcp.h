@@ -10,6 +10,10 @@
 #ifndef __NET_MTK_MTK_TCP_H__
 #define __NET_MTK_MTK_TCP_H__
 
+#ifdef __mips__
+#undef sp /* MIPS register name collision with struct field 'sp' */
+#endif
+
 enum mtk_tcp_cb_status {
 	MTK_TCP_CB_NONE,
 	MTK_TCP_CB_NEW_CONN,
@@ -69,7 +73,9 @@ void mtk_tcp_reset_all_conn(void);
 /* Return 1 if connection is in ESTABLISHED state */
 int mtk_tcp_conn_is_alive(const void *conn);
 
-/* Called periodically to check the TCP status & send packets */
-void mtk_tcp_periodic_check(void);
+/* Called periodically to check the TCP status & send packets.
+ * Returns 1 if all listeners and connections are done (can exit loop), 0 otherwise.
+ */
+int mtk_tcp_periodic_check(void);
 
 #endif /* __NET_MTK_MTK_TCP_H__ */

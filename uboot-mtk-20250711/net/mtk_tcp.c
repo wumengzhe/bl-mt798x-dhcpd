@@ -10,14 +10,47 @@
 #include <command.h>
 #include <div64.h>
 #include <errno.h>
+#include <env.h>
 #include <malloc.h>
 #include <net.h>
 #include <linux/list.h>
 #include <asm/global_data.h>
+/*
+ * On MIPS, arch/mips/include/asm/regdef.h #defines sp as $29.
+ * Undefine it before mtk_tcp.h is parsed so struct field 'sp' stays intact.
+ */
+#ifdef __mips__
+#undef sp /* MIPS $29 register macro collides with struct field */
+#endif
 #include "mtk_tcp.h"
 #include "arp.h"
 
 DECLARE_GLOBAL_DATA_PTR;
+
+/**
+ * mtk_tcp_is_verbose() - check if verbose logging is enabled
+ *
+ * Returns true if verbose logging should be enabled. Priority:
+ * 1. "mtk_tcp_verbose" environment variable (if set)
+ * 2. CONFIG_MTK_TCP_VERBOSE Kconfig option
+ *
+ * Environment variable values: "1", "true", "yes", "on" (case-insensitive)
+ */
+static bool mtk_tcp_is_verbose(void)
+{
+	const char *val = env_get("mtk_tcp_verbose");
+
+	if (val && val[0])
+		return !strcmp(val, "1") ||
+		       !strcasecmp(val, "true") ||
+		       !strcasecmp(val, "yes") ||
+		       !strcasecmp(val, "on");
+
+	return IS_ENABLED(CONFIG_MTK_TCP_VERBOSE);
+}
+
+#define mtk_tcp_log(fmt, ...) \
+	do { if (mtk_tcp_is_verbose()) printf(fmt, ##__VA_ARGS__); } while (0)
 
 struct mtk_tcp_conn {
 	struct list_head node;
@@ -86,6 +119,7 @@ static u16 mtk_tcp_port_seq = 50000;
 void mtk_tcp_start(void)
 {
 	mtk_tcp_stop = 0;
+	mtk_tcp_log("[MTK_TCP] mtk_tcp_start: stop=%d\n", mtk_tcp_stop);
 }
 
 static struct mtk_tcp_listen *mtk_tcp_listen_find(__be16 port)
@@ -121,6 +155,9 @@ int mtk_tcp_listen(__be16 port, mtk_tcp_conn_cb cb)
 
 	list_add_tail(&l->node, &listen_head);
 
+	mtk_tcp_log("[MTK_TCP] listen: port %d registered, stop=%d\n",
+		    ntohs(port), mtk_tcp_stop);
+
 	return 0;
 }
 
@@ -130,7 +167,9 @@ int mtk_tcp_listen_stop(__be16 port)
 
 	l = mtk_tcp_listen_find(port);
 	if (l) {
+		mtk_tcp_log("[MTK_TCP] listen_stop: port %d removed\n", ntohs(port));
 		list_del(&l->node);
+		free(l);
 		return 0;
 	}
 
@@ -157,6 +196,9 @@ static struct mtk_tcp_conn *mtk_tcp_conn_find(__be32 remoteip, __be16 remoteport
 
 static void mtk_tcp_conn_del(struct mtk_tcp_conn *c)
 {
+	mtk_tcp_log("[MTK_TCP] conn_del: %pI4:%d -> %d, status=%d\n",
+		    &c->ip_remote, ntohs(c->port_remote), ntohs(c->port_local),
+		    c->status);
 	list_del(&c->node);
 	free(c);
 }
@@ -258,9 +300,13 @@ static struct mtk_tcp_conn *mtk_tcp_conn_create(__be32 remoteip, struct mtk_tcp_
 	u16 mss;
 	u8 *o;
 
+	mtk_tcp_log("[MTK_TCP] conn_create: SYN from %pI4:%d -> %d\n",
+		    &remoteip, ntohs(tcp->src), ntohs(tcp->dst));
+
 	c = malloc(sizeof(struct mtk_tcp_conn));
 	if (!c) {
 		/* malloc fail, use tmp_c as buffer to finish error handling */
+		mtk_tcp_log("[MTK_TCP] conn_create: malloc failed!\n");
 		c = &tmp_c;
 	}
 
@@ -325,6 +371,9 @@ static struct mtk_tcp_conn *mtk_tcp_conn_create(__be32 remoteip, struct mtk_tcp_
 	c->ts = get_timer(0);
 	c->ts_rexmit = get_timer(0);
 	c->num_rexmit = 0;
+
+	mtk_tcp_log("[MTK_TCP] conn_create: SYN_RCVD -> %pI4:%d, seq=%u\n",
+		    &c->ip_remote, ntohs(c->port_remote), c->local_seq);
 
 	return c;
 }
@@ -452,6 +501,11 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 
 	data_size = len - iphdr_len - tcphdr_len;
 
+	mtk_tcp_log("[MTK_TCP] rx: %pI4:%d -> %pI4:%d flags=0x%03x len=%u stop=%d\n",
+		    &ip->ip_src, ntohs(tcp->src),
+		    &ip->ip_dst, ntohs(tcp->dst),
+		    flags, data_size, mtk_tcp_stop);
+
 	/* discard urgent data */
 	if (flags & MTK_TCP_URG) {
 		data += ntohs(tcp->urg);
@@ -464,12 +518,41 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 	/* find existing connection */
 	c = mtk_tcp_conn_find(net_read_ip(&ip->ip_src).s_addr, tcp->src, tcp->dst);
 
+	/*
+	 * If a SYN arrives on an existing connection (not in handshake
+	 * state), the client is attempting to reconnect while the old
+	 * connection is still tracked.  This commonly happens after a
+	 * network command (tftp/ping via net_loop()) runs: eth_halt()
+	 * briefly interrupts TCP traffic, the client's keep-alive or
+	 * AJAX polling fails, and the browser sends a fresh SYN.
+	 *
+	 * RFC 793: "If the connection is in a synchronized state
+	 * (ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING,
+	 * LAST-ACK, TIME-WAIT), any unacceptable segment (out of
+	 * window, etc.) elicits ... a reset."
+	 *
+	 * We send RST on the old connection, delete it, and fall
+	 * through to create a new one for the incoming SYN.
+	 */
+	if (c && (flags & MTK_TCP_FLAG_MASK) == MTK_TCP_SYN &&
+	    c->status != SYN_SENT && c->status != SYN_RCVD) {
+		mtk_tcp_log("[MTK_TCP] rx: SYN on existing conn %pI4:%d status=%d, resetting\n",
+			    &c->ip_remote, ntohs(c->port_remote), c->status);
+		mtk_tcp_send_packet(c, MTK_TCP_RST | MTK_TCP_ACK,
+				    c->local_seq, c->peer_seq, NULL, 0);
+		mtk_tcp_conn_del(c);
+		c = NULL;
+	}
+
 	if (!c) {
 		/* whether to create new connection */
 		if ((flags & MTK_TCP_FLAG_MASK) == MTK_TCP_SYN) {
 			if ((l = mtk_tcp_listen_find(tcp->dst))) {
-				if (mtk_tcp_stop)
+				if (mtk_tcp_stop) {
+					mtk_tcp_log("[MTK_TCP] rx: SYN rejected, stop=%d\n",
+						    mtk_tcp_stop);
 					return false;
+				}
 
 				/* create new connection */
 				mtk_tcp_conn_create(
@@ -490,6 +573,8 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 	cbd.pdata = c->pdata;
 
 	if (flags & MTK_TCP_RST) {
+		mtk_tcp_log("[MTK_TCP] rx: RST from %pI4:%d, status=%d\n",
+			    &c->ip_remote, ntohs(c->port_remote), c->status);
 		if (c->status != SYN_RCVD) {
 			/* The peer has reset the connection */
 			cbd.status = MTK_TCP_CB_REMOTE_CLOSED;
@@ -546,6 +631,9 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 					    c->peer_seq, NULL, 0);
 		}
 
+		mtk_tcp_log("[MTK_TCP] state: %pI4:%d %s -> ESTABLISHED\n",
+			    &c->ip_remote, ntohs(c->port_remote),
+			    c->status == SYN_SENT ? "SYN_SENT" : "SYN_RCVD");
 		c->status = ESTABLISHED;
 
 		cbd.status = MTK_TCP_CB_NEW_CONN;
@@ -655,6 +743,8 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 
 		if (flags & MTK_TCP_FIN) {
 			/* The peer is closing the connection */
+			mtk_tcp_log("[MTK_TCP] rx: FIN from %pI4:%d, -> CLOSE_WAIT\n",
+				    &c->ip_remote, ntohs(c->port_remote));
 			c->status = CLOSE_WAIT;
 			cbd.status = MTK_TCP_CB_REMOTE_CLOSING;
 			assert((size_t)c->cb > gd->ram_base);
@@ -666,6 +756,8 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 		if (mtk_tcp_seq_sub(ack, c->local_seq + 1))
 			return true;
 
+		mtk_tcp_log("[MTK_TCP] rx: LAST_ACK done for %pI4:%d, -> CLOSED\n",
+			    &c->ip_remote, ntohs(c->port_remote));
 		c->status = CLOSE_WAIT;
 		cbd.status = MTK_TCP_CB_REMOTE_CLOSED;
 		assert((size_t)c->cb > gd->ram_base);
@@ -679,23 +771,29 @@ bool mtk_receive_tcp(struct ip_hdr *ip, int len, struct ethernet_hdr *et)
 		}
 
 		if ((flags & (MTK_TCP_ACK | MTK_TCP_FIN)) == (MTK_TCP_ACK | MTK_TCP_FIN)) {
+			mtk_tcp_log("[MTK_TCP] rx: FIN_WAIT_1 + ACK+FIN -> TIME_WAIT\n");
 			c->status = TIME_WAIT;
 			c->local_seq++;
 		} else if (flags & MTK_TCP_ACK) {
+			mtk_tcp_log("[MTK_TCP] rx: FIN_WAIT_1 + ACK -> FIN_WAIT_2\n");
 			c->status = FIN_WAIT_2;
 			c->local_seq++;
 		} else if (flags & MTK_TCP_FIN) {
+			mtk_tcp_log("[MTK_TCP] rx: FIN_WAIT_1 + FIN -> CLOSING\n");
 			c->status = CLOSING;
 		}
 		break;
 	case FIN_WAIT_2:
-		if (flags & MTK_TCP_FIN)
+		if (flags & MTK_TCP_FIN) {
+			mtk_tcp_log("[MTK_TCP] rx: FIN_WAIT_2 + FIN -> TIME_WAIT\n");
 			c->status = TIME_WAIT;
+		}
 		break;
 	case CLOSING:
 		if (mtk_tcp_seq_sub(ack, c->local_seq + 1))
 			return true;
 
+		mtk_tcp_log("[MTK_TCP] rx: CLOSING + ACK -> TIME_WAIT\n");
 		c->status = TIME_WAIT;
 		c->local_seq++;
 		break;
@@ -991,6 +1089,8 @@ static void mtk_tcp_conn_check(struct mtk_tcp_conn *c)
 				 * Close the connection after we've sent
 				 * current data chunk
 				 */
+				mtk_tcp_log("[MTK_TCP] conn_check: %pI4:%d -> FIN_WAIT_1 (close_flag)\n",
+					    &c->ip_remote, ntohs(c->port_remote));
 				mtk_tcp_send_packet(c, MTK_TCP_FIN | MTK_TCP_ACK,
 						c->local_seq, c->peer_seq,
 						NULL, 0);
@@ -1005,6 +1105,8 @@ static void mtk_tcp_conn_check(struct mtk_tcp_conn *c)
 
 		break;
 	case CLOSE_WAIT:
+		mtk_tcp_log("[MTK_TCP] conn_check: %pI4:%d CLOSE_WAIT -> LAST_ACK\n",
+			    &c->ip_remote, ntohs(c->port_remote));
 		mtk_tcp_send_packet_ctrl(c, MTK_TCP_FIN | MTK_TCP_ACK);
 		c->status = LAST_ACK;
 		mtk_tcp_rexmit_init(c);
@@ -1031,6 +1133,8 @@ static void mtk_tcp_conn_check(struct mtk_tcp_conn *c)
 
 		break;
 	case TIME_WAIT:
+		mtk_tcp_log("[MTK_TCP] conn_check: %pI4:%d TIME_WAIT -> CLOSED\n",
+			    &c->ip_remote, ntohs(c->port_remote));
 		mtk_tcp_send_packet_ctrl(c, MTK_TCP_ACK);
 		cbd.status = MTK_TCP_CB_CLOSED;
 		assert((size_t)c->cb > gd->ram_base);
@@ -1042,7 +1146,7 @@ static void mtk_tcp_conn_check(struct mtk_tcp_conn *c)
 	}
 }
 
-void mtk_tcp_periodic_check(void)
+int mtk_tcp_periodic_check(void)
 {
 	struct list_head *lh, *n;
 	struct mtk_tcp_conn *c;
@@ -1054,11 +1158,27 @@ void mtk_tcp_periodic_check(void)
 		num++;
 	}
 
-	if (list_empty(&listen_head))
+	if (list_empty(&listen_head)) {
+		if (!mtk_tcp_stop)
+			mtk_tcp_log("[MTK_TCP] periodic_check: listen_head empty, setting stop=1\n");
 		mtk_tcp_stop = 1;
+	}
 
-	if (mtk_tcp_stop && !num)
-		net_state = NETLOOP_SUCCESS;
+	mtk_tcp_log("[MTK_TCP] periodic_check: stop=%d, conns=%d, listen_empty=%d\n",
+		    mtk_tcp_stop, num, list_empty(&listen_head));
+
+	/*
+	 * "Done" means: no listeners AND no active connections.
+	 * Using mtk_tcp_stop alone is unsafe because it is a module-level
+	 * static that can carry over from a previous session (e.g. the
+	 * failsafe's mtk_tcp_close_all_conn() on exit, or a prior wget
+	 * that auto-set it via the list_empty() check above). The caller
+	 * may not have reset it before the first poll, which caused the
+	 * failsafe loop to terminate immediately on entry. Anchoring the
+	 * exit condition to listen_head ensures sessions with registered
+	 * listeners (httpd/telnetd) never spuriously exit.
+	 */
+	return (list_empty(&listen_head) && !num) ? 1 : 0;
 }
 
 static int mtk_tcp_send_packet_opt(struct mtk_tcp_conn *c, u16 flags, u32 seq, u32 ack,
@@ -1091,7 +1211,7 @@ static int mtk_tcp_send_packet_opt(struct mtk_tcp_conn *c, u16 flags, u32 seq, u
 		MTK_TCP_HDR_LEN_SHIFT) | (flags & MTK_TCP_FLAG_MASK));
 	memcpy(&tcp->seq, &seq, 4);
 	memcpy(&tcp->ack, &ack, 4);
-	tcp->wnd = htons(c->mss);
+	tcp->wnd = htons(MTK_TCP_RCV_WND);
 	/* avoid compiler's optimization leading to an unaligned access */
 	memset(&tcp->urg, 0, sizeof(tcp->urg));
 	tcp->chksum = 0;
@@ -1202,10 +1322,28 @@ void mtk_tcp_close_all_conn(void)
 {
 	struct list_head *lh, *n;
 	struct mtk_tcp_conn *c;
+	struct mtk_tcp_listen *l;
+
+	mtk_tcp_log("[MTK_TCP] mtk_tcp_close_all_conn: stop=%d\n", mtk_tcp_stop);
 
 	list_for_each_safe(lh, n, &conn_head) {
 		c = list_entry(lh, struct mtk_tcp_conn, node);
 		mtk_tcp_close_conn(c, 0);
+	}
+
+	/*
+	 * Remove all listeners so that mtk_tcp_periodic_check() can
+	 * return 1 (list_empty(&listen_head) && !num) and the polling
+	 * loop in failsafe can exit cleanly.  This is needed for
+	 * initramfs boot where we must leave net_loop / poll loop
+	 * without a board reset.
+	 */
+	list_for_each_safe(lh, n, &listen_head) {
+		l = list_entry(lh, struct mtk_tcp_listen, node);
+		mtk_tcp_log("[MTK_TCP] close_all_conn: removing listener port %d\n",
+			    ntohs(l->port));
+		list_del(&l->node);
+		free(l);
 	}
 
 	mtk_tcp_stop = 1;
@@ -1215,6 +1353,8 @@ void mtk_tcp_reset_all_conn(void)
 {
 	struct list_head *lh, *n;
 	struct mtk_tcp_conn *c;
+
+	mtk_tcp_log("[MTK_TCP] mtk_tcp_reset_all_conn: stop=%d\n", mtk_tcp_stop);
 
 	list_for_each_safe(lh, n, &conn_head) {
 		c = list_entry(lh, struct mtk_tcp_conn, node);

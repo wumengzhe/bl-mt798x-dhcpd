@@ -16,6 +16,7 @@
 	};
 
 	config {
+		bootcmd = "mtkboardboot";
 		blink_led = "red:status";
 		system_led = "green:status";
 	};
@@ -25,7 +26,7 @@
 			label = "default";
 			// mtd layout immortalwrt/openwrt 114M ubi firmware
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),1024k(art),1024k(Factory),2048k(fip),114688k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),1024k(art),1024k(Factory),2048k(fip),116736k(ubi)";
 		};
 
 		layout@1 {
@@ -64,12 +65,12 @@
 
 		status_red_led: led-0 {
 			label = "red:status";
-			gpios = <&pio 12 GPIO_ACTIVE_LOW>;
+			gpios = <&pio 14 GPIO_ACTIVE_LOW>;
 		};
 
 		status_green_led: led-1 {
 			label = "green:status";
-			gpios = <&pio 11 GPIO_ACTIVE_LOW>;
+			gpios = <&pio 15 GPIO_ACTIVE_LOW>;
 		};
 	};
 
