@@ -169,13 +169,13 @@ jobs:
                   multi_layout_config="${{matrix.WRT_MTK}}/configs/${soc}_${device}_multi_layout_defconfig"
                   if [[ -f "$multi_layout_config" ]]; then
                     # 添加标准配置命令
-                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2025 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
                     
                     # 添加 multi_layout 配置命令
-                    lines_map["${soc}_${device}_multi_layout"]="SOC=$soc BOARD=$device MULTI_LAYOUT=1 VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                    lines_map["${soc}_${device}_multi_layout"]="SOC=$soc BOARD=$device MULTI_LAYOUT=1 VERSION=2025 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
                   else
                     # 只添加标准配置命令
-                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2024 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
+                    lines_map["${soc}_${device}_standard"]="SOC=$soc BOARD=$device VERSION=2025 ATF_DIR=${{matrix.WRT_ATF}} UBOOT_DIR=${{matrix.WRT_MTK}} ./build.sh"
                   fi
                 fi
               fi
