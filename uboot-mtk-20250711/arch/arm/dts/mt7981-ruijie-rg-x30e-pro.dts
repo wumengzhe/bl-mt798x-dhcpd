@@ -6,4 +6,41 @@
 / {
 	model = "mt7981-ruijie-rg-x30e-pro";
 	compatible = "mediatek,mt7981", "mediatek,mt7981-rfb";
+
+	mtd-layout {
+		layout@0 {
+			label = "default";
+			// stock layout, identical to CONFIG_MTDPARTS_DEFAULT
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),2048k(fip2),512k(product_info),512k(kdump),35328k(firmware),35328k(firmware2),43520k(backup)";
+		};
+
+		layout@1 {
+			label = "lede";
+			// lede/openwrt layout: reserved parts moved before ubi (128M nand)
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),2048k(fip2),512k(product_info),512k(kdump),114176k(ubi)";
+		};
+
+		layout@2 {
+			label = "256m";
+			// for 256M spi-nand
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),2048k(fip2),512k(product_info),512k(kdump),237056k(ubi)";
+		};
+
+		layout@3 {
+			label = "512m";
+			// for 512M spi-nand
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),2048k(fip2),512k(product_info),512k(kdump),482816k(ubi)";
+		};
+
+		layout@4 {
+			label = "expand(auto)";
+			// ubi fills the whole flash, fits 128M/256M/512M
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),2048k(fip2),512k(product_info),512k(kdump),-(ubi)";
+		};
+	};
 };
