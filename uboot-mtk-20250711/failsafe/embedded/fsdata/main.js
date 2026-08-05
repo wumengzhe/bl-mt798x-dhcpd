@@ -1371,6 +1371,7 @@ function getmtdlayoutlist() {
             if (currentLayoutEl) {
                 const cur = layoutNames[0];
                 currentLayoutEl.innerHTML = cur ? t("label.current_mtd") + cur : "";
+                currentLayoutEl.hidden = !cur;
             }
 
             const chooseLayoutEl = document.getElementById("choose_mtd_layout");
