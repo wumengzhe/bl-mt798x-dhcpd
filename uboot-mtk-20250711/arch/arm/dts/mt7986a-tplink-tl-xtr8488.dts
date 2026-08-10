@@ -15,6 +15,39 @@
 		tick-timer = &timer0;
 	};
 
+	mtd-layout {
+		layout@0 {
+			label = "default";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),122880k(ubi)";
+		};
+
+		layout@1 {
+			label = "lede";
+			// lede/openwrt layout: single ubi fills 128M nand (aligned to kernel ubi @5632k)
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),125440k(ubi)";
+		};
+
+		layout@2 {
+			label = "256m";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),256512k(ubi)";
+		};
+
+		layout@3 {
+			label = "512m";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),518656k(ubi)";
+		};
+
+		layout@4 {
+			label = "expand(auto)";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),-(ubi)";
+		};
+	};
+
 	config {
 		bootcmd = "mtkboardboot";
 		blink_led = "green:status";

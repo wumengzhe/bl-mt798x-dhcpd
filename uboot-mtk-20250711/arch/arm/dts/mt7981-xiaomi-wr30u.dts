@@ -47,6 +47,34 @@
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),1024k(rsv0),110m(ubi)";
 		};
+
+		layout@3 {
+			label = "lede";
+			// lede/openwrt: KF kept before ubi, ubi last (128M nand, aligns kernel ubi@0x640000)
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),256k(KF),116480k(ubi)";
+		};
+
+		layout@4 {
+			label = "256m";
+			// for 256M spi-nand (nmbm usable 245760k), ubi start aligns kernel ubi@0x640000
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),256k(KF),239360k(ubi)";
+		};
+
+		layout@5 {
+			label = "512m";
+			// for 512M spi-nand (nmbm usable 491520k), ubi start aligns kernel ubi@0x640000
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),256k(KF),485120k(ubi)";
+		};
+
+		layout@6 {
+			label = "expand(auto)";
+			// ubi fills whole flash, fits 128M/256M/512M, ubi start aligns kernel ubi@0x640000
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),256k(KF),-(ubi)";
+		};
 	};
 
 	gpio-keys {

@@ -21,6 +21,43 @@
 		system_led = "red:status";
 	};
 
+	mtd-layout {
+		layout@0 {
+			label = "default";
+			// stock layout, identical to CONFIG_MTDPARTS_DEFAULT
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),1536k(fip),117760k(ubi)";
+		};
+
+		layout@1 {
+			label = "lede";
+			// lede/openwrt layout: single ubi, aligned to kernel ubi @5632k
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),125440k(ubi)";
+		};
+
+		layout@2 {
+			label = "256m";
+			// for 256M spi-nand
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),256512k(ubi)";
+		};
+
+		layout@3 {
+			label = "512m";
+			// for 512M spi-nand
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),518656k(ubi)";
+		};
+
+		layout@4 {
+			label = "expand(auto)";
+			// ubi fills the whole flash, fits 128M/256M/512M
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),-(ubi)";
+		};
+	};
+
 	memory@40000000 {
 		device_type = "memory";
 		reg = <0x40000000 0x20000000>;

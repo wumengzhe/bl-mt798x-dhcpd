@@ -40,7 +40,7 @@
 			label = "256m";
 			// mtd layout for 256m nand firmware
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),1024k(art),1024k(Factory),2048k(fip),235520k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),1024k(art),1024k(Factory),2048k(fip),240128k(ubi)";
 		};
 
 		layout@3 {
