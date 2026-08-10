@@ -297,6 +297,17 @@ int start_web_failsafe(void)
 		schedule();
 	}
 
+	/*
+	 * Stop services in correct order: DNSD first, then DHCPD.
+	 * DNSD chains on top of DHCPD handler, so DNSD must be
+	 * unstacked before DHCPD to avoid a dangling handler pointer.
+	 */
+#ifdef CONFIG_MTK_DNSD
+	mtk_dnsd_stop();
+#endif
+#ifdef CONFIG_MTK_DHCPD
+	mtk_dhcpd_stop();
+#endif
 	failsafe_httpd_running = false;
 	mtk_tcp_close_all_conn();
 	eth_halt();
