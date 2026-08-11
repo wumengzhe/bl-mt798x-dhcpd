@@ -30,18 +30,6 @@
 		};
 
 		layout@2 {
-			label = "256m";
-			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),240128k(ubi)";
-		};
-
-		layout@3 {
-			label = "512m";
-			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),485888k(ubi)";
-		};
-
-		layout@4 {
 			label = "expand(auto)";
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
@@ -80,7 +68,7 @@
 
 		status_blue_led: led-1 {
 			label = "blue:status";
-			gpios = <&pio 13 GPIO_ACTIVE_LOW>;
+			gpios = <&pio 13 GPIO_ACTIVE_HIGH>;
 		};
 	};
 
