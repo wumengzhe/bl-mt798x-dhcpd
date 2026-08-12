@@ -35,13 +35,13 @@
 		layout@2 {
 			label = "256m";
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:4096k(bootloader),240128k(ubi)";
+			mtdparts = "nmbm0:4096k(bootloader),241664k(ubi)";
 		};
 
 		layout@3 {
 			label = "512m";
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:4096k(bootloader),485888k(ubi)";
+			mtdparts = "nmbm0:4096k(bootloader),487424k(ubi)";
 		};
 
 		layout@4 {

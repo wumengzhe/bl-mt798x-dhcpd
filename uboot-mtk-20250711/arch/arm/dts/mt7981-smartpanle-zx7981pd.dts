@@ -60,6 +60,27 @@
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),640k(woem),384k(wtinfo),384k(nvram),57344k(ubi2),-(ubi)";
 		};
+
+		layout@5 {
+			label = "ubootmod-256m";
+			// ubootmod layout (no ubi2), 256M spi-nand: ubi @7040k
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),640k(woem),384k(wtinfo),384k(nvram),238720k(ubi)";
+		};
+
+		layout@6 {
+			label = "ubootmod-512m";
+			// ubootmod layout (no ubi2), 512M spi-nand: ubi @7040k
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),640k(woem),384k(wtinfo),384k(nvram),484480k(ubi)";
+		};
+
+		layout@7 {
+			label = "ubootmod-expand(auto)";
+			// ubootmod layout (no ubi2), ubi fills the whole flash
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),640k(woem),384k(wtinfo),384k(nvram),-(ubi)";
+		};
 	};
 
 	gpio-keys {
