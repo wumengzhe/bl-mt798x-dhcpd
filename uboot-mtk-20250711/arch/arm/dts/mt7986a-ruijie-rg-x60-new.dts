@@ -13,21 +13,21 @@
 			label = "lede";
 			// lede/openwrt layout: single ubi, aligned to kernel ubi @6656k
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),116224k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),-(ubi)";
 		};
 
 		layout@5 {
 			label = "256m";
 			// for 256M spi-nand
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),239104k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),-(ubi)";
 		};
 
 		layout@6 {
 			label = "512m";
 			// for 512M spi-nand
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),484864k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),-(ubi)";
 		};
 
 		layout@7 {

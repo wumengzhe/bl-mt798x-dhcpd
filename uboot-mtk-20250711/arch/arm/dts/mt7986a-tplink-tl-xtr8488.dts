@@ -26,19 +26,19 @@
 			label = "lede";
 			// lede/openwrt layout: single ubi fills 128M nand (aligned to kernel ubi @5632k)
 			mtdids = "spi-nand0=spi-nand0";
-			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),125440k(ubi)";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),-(ubi)";
 		};
 
 		layout@2 {
 			label = "256m";
 			mtdids = "spi-nand0=spi-nand0";
-			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),240128k(ubi)";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),-(ubi)";
 		};
 
 		layout@3 {
 			label = "512m";
 			mtdids = "spi-nand0=spi-nand0";
-			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),485888k(ubi)";
+			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),-(ubi)";
 		};
 
 		layout@4 {

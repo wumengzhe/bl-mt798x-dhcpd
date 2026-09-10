@@ -37,21 +37,21 @@
 		layout@1 {
 			label = "lede";
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),98304k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@2 {
 			label = "256m";
 			// universal 256M per-size ubi size, matches lede cmcc-a10-mod-256m
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),240128k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@3 {
 			label = "512m";
 			// universal 512M per-size ubi size, matches lede cmcc-a10-mod-512m
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),485888k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@4 {
