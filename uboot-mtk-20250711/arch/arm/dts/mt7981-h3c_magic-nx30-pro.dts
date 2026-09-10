@@ -33,28 +33,28 @@
 			label = "immortalwrt-112m";
 			// mtd layout for 112m ubi firmware
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),112M(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@2 {
 			label = "lede";
 			// lede/openwrt: stock parts kept before ubi, ubi last (128M nand, aligns kernel ubi@0x3800000)
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),117248k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@3 {
 			label = "256m";
 			// for 256M spi-nand (nmbm usable 245760k), ubi start aligns kernel ubi@0x3800000
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),240128k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@4 {
 			label = "512m";
 			// for 512M spi-nand (nmbm usable 491520k), ubi start aligns kernel ubi@0x3800000
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),485888k(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
 		};
 
 		layout@5 {
