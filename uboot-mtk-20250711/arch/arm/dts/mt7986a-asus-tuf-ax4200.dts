@@ -32,6 +32,13 @@
 			mtdparts = "nmbm0:4096k(bootloader),258048k(ubi)";
 		};
 
+		layout@openwrt {
+
+			label = "openwrt";
+
+			mtdparts = "nmbm0:4096k(bootloader),-(ubi)";
+		};
+
 		layout@2 {
 			label = "256m";
 			mtdids = "nmbm0=nmbm0";

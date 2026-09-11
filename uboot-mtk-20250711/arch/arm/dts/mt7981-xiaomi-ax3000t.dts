@@ -55,6 +55,13 @@
 			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),256k(KF),116480k(ubi)";
 		};
 
+		layout@openwrt {
+
+			label = "openwrt";
+
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),256k(KF),-(ubi)";
+		};
+
 		layout@4 {
 			label = "256m";
 			// for 256M spi-nand (nmbm usable 245760k), ubi start aligns kernel ubi@0x640000

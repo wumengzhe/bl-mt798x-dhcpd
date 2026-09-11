@@ -15,6 +15,10 @@
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),116224k(ubi)";
 		};
+		layout@openwrt {
+			label = "openwrt";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),512k(product_info),512k(kdump),-(ubi)";
+		};
 
 		layout@5 {
 			label = "256m";

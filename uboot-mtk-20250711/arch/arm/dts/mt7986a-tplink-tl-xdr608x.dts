@@ -36,6 +36,13 @@
 			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),125440k(ubi)";
 		};
 
+		layout@openwrt {
+
+			label = "openwrt";
+
+			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),-(ubi)";
+		};
+
 		layout@2 {
 			label = "256m";
 			// for 256M spi-nand

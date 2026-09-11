@@ -37,6 +37,13 @@
 			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),-(ubi)";
 		};
 
+		layout@openwrt {
+
+			label = "openwrt";
+
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),-(ubi)";
+		};
+
 		layout@3 {
 			label = "256m";
 			// for 256M spi-nand

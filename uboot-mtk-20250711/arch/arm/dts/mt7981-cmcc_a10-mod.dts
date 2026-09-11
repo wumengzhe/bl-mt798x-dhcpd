@@ -40,6 +40,13 @@
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),98304k(ubi)";
 		};
 
+		layout@openwrt {
+
+			label = "openwrt";
+
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+		};
+
 		layout@2 {
 			label = "256m";
 			// universal 256M per-size ubi size, matches lede cmcc-a10-mod-256m
