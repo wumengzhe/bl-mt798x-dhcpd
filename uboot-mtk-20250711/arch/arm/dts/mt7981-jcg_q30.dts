@@ -29,6 +29,13 @@
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),114688k(ubi)";
 		};
 
+		layout@openwrt {
+
+			label = "openwrt";
+
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+		};
+
 		layout@2 {
 			label = "256m";
 			// for 256M spi-nand (ubi 240128k, ~16M reserved for BMT)
