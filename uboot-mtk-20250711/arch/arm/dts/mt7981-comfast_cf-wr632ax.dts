@@ -38,14 +38,14 @@
 			label = "mod-112m";
 			// mtd layout for openwrt/immortalwrt 112M firmware
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),112m(ubi)";
 		};
 
 		layout@2 {
 			label = "mod-114m";
 			// mtd layout for openwrt/immortalwrt 114M firmware
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),114m(ubi)";
 		};
 
 		layout@3 {
@@ -59,14 +59,14 @@
 			label = "256m";
 			// for 256M spi-nand
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),240128k(ubi)";
 		};
 
 		layout@5 {
 			label = "512m";
 			// for 512M spi-nand
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),485888k(ubi)";
 		};
 
 		layout@6 {

@@ -33,7 +33,7 @@
 			label = "512m";
 			// for 512M spi-nand
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),485888k(ubi)";
 		};
 
 		layout@2 {
@@ -53,7 +53,7 @@
 		layout@4 {
 			label = "256m";
 			mtdids = "nmbm0=nmbm0";
-			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),240128k(ubi)";
 		};
 	};
 
