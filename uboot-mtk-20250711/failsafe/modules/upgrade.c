@@ -25,7 +25,7 @@
 #include "../../board/mediatek/common/mmc_helper.h"
 #endif
 
-#include "../failsafe_internal.h"
+#include <failsafe/internal.h>
 
 /* ------------------------------------------------------------------ */
 /*  Core upgrade state                                                 */
@@ -419,9 +419,6 @@ void result_handler(enum httpd_uri_handler_status status,
 #endif
 
 		free(response->session_data);
-
-		if (auto_action_pending)
-			mtk_tcp_close_all_conn();
 	}
 }
 
