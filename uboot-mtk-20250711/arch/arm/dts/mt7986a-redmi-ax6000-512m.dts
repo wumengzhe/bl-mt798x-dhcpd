@@ -41,7 +41,28 @@
 			label = "openwrt";
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),30720k(ubi_kernel),-(ubi)";
-		};};
+		};
+		layout@lede {
+			label = "lede";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),-(ubi)";
+		};
+		layout@expand {
+			label = "expand(auto)";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),-(ubi)";
+		};
+		layout@256m {
+			label = "256m";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),238592k(ubi)";
+		};
+		layout@512m {
+			label = "512m";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),484352k(ubi)";
+		};
+};
 
 	chosen {
 		stdout-path = &uart0;
@@ -140,3 +161,6 @@
 &watchdog {
 	status = "disabled";
 };
+
+
+

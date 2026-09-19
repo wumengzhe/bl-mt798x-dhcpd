@@ -27,7 +27,22 @@
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),117248k(ubi)";
 		};
-	};
+	
+		layout@openwrt {
+			label = "openwrt";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+		};
+		layout@lede {
+			label = "lede";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+		};
+		layout@expand {
+			label = "expand(auto)";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(Factory),2048k(fip),-(ubi)";
+		};
+};
 
 	gpio-keys {
 		compatible = "gpio-keys";
@@ -153,3 +168,5 @@
 &watchdog {
 	status = "disabled";
 };
+
+

@@ -59,6 +59,38 @@
 	bl2_verify {
 		bl2_compatible = "spim-nand";
 	};
+
+	mtd-layout {
+		layout@default {
+			label = "default";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+		};
+		layout@lede {
+			label = "lede";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+		};
+		layout@openwrt {
+			label = "openwrt";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+		};
+		layout@256m {
+			label = "256m";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),238592k(ubi)";
+		};
+		layout@512m {
+			label = "512m";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),484352k(ubi)";
+		};
+		layout@expand {
+			label = "expand(auto)";
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+		};
+	};
 };
 
 &uart0 {
@@ -131,3 +163,5 @@
 &xhci {
   status = "okay";
 };
+
+
