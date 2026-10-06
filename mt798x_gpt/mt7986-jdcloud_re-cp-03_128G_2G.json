@@ -26,42 +26,7 @@
 	},
 	"rootfs": {
 		"start": 50176,
-		"end": 152575,
+		"end": 4244479,
 		"unique_part_guid": "{309a3e76-270b-41b2-b5d5-ed8154e7542b}"
-	},
-	"kernel2": {
-		"start": 152576,
-		"end": 185343,
-		"unique_part_guid": "{9c8e460f-7160-4c25-a420-e7deeb10d5d3}"
-	},
-	"rootfs2": {
-		"start": 185344,
-		"end": 287743,
-		"unique_part_guid": "{508b8f82-164c-4898-8edc-adaa59438cd4}"
-	},
-	"rootfs_data": {
-		"start": 287744,
-		"end": 4482047,
-		"unique_part_guid": "{dd18c072-adb3-412b-bf97-37617b01adf3}"
-	},
-	"log": {
-		"start": 4482048,
-		"end": 4616191,
-		"unique_part_guid": "{2d18c070-adb6-412b-bf90-37617b01adf5}"
-	},
-	"plugin": {
-		"start": 4616192,
-		"end": 6713343,
-		"unique_part_guid": "{3d18c075-adb0-412b-bf92-37617b01adf6}"
-	},
-	"swap": {
-		"start": 6713344,
-		"end": 8810495,
-		"unique_part_guid": "{4d18c079-adb2-412b-bf93-37617b01adf7}"
-	},
-	"storage": {
-		"start": 8810496,
-		"end": 240615424,
-		"unique_part_guid": "{5d18c072-adb3-412b-bf95-37617b01adf8}"
 	}
 }
