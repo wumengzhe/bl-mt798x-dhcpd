@@ -26,7 +26,7 @@
 	},
 	"rootfs": {
 		"start": 154624,
-		"end": 122126302,
+		"end": 120831966,
 		"unique_part_guid": "{493e0f82-59c0-11ee-b4d0-b083fea0360d}"
 	}
 }
