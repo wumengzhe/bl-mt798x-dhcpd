@@ -74,6 +74,13 @@
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),1920k(factory),128k(Trace),2048k(fip),-(ubi)";
 		};
+
+		layout@6 {
+			label = "1g";
+			// for 1G spi-nand
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),512k(u-boot-env),1920k(factory),128k(Trace),2048k(fip),731648k(ubi)";
+		};
 	};
 
 	gpio-keys {

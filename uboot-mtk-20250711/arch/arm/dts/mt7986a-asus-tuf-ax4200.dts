@@ -56,6 +56,13 @@
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:4096k(bootloader),-(ubi)";
 		};
+
+		layout@5 {
+			label = "1g";
+			// for 1G spi-nand
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:4096k(bootloader),733184k(ubi)";
+		};
 	};
 
 	config {
