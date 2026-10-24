@@ -45,7 +45,11 @@ failsafe_fw_t fw_type;
 /*  MTD layout (conditionally compiled)                                */
 /* ------------------------------------------------------------------ */
 
-#define MTD_LAYOUTS_MAXLEN	128
+/* 布局下拉字符串缓冲: "<current>;<label1>;...;<labelN>;"。
+ * 128 对多布局板会截断（如 smartpanle 11 个布局 = 131 字节，
+ * 会把末尾的 1g / ubootmod-1g 从 web 页面下拉里切掉），
+ * 放大到 256 留足余量（当前全板最坏 222 字节含 gpio label 的最坏估计）。 */
+#define MTD_LAYOUTS_MAXLEN	256
 #define MTD_LAYOUT_CUSTOM_LABEL	"custom"
 #define MTD_LAYOUT_CUSTOM_ENV	"mtd_layout_custom"
 
