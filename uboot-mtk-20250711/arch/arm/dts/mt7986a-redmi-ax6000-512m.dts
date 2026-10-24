@@ -61,6 +61,13 @@
 			label = "512m";
 			mtdids = "nmbm0=nmbm0";
 			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),484352k(ubi)";
+		}
+
+		layout@1g {
+			label = "1g";
+			// for 1G spi-nand
+			mtdids = "nmbm0=nmbm0";
+			mtdparts = "nmbm0:1024k(bl2),256k(Nvram),256k(Bdata),2048k(factory),2048k(fip),256k(crash),256k(crash_log),730112k(ubi)";
 		};
 };
 
