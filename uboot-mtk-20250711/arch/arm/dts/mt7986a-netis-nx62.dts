@@ -44,6 +44,41 @@
 			mtdids = "spi-nand0=spi-nand0";
 			mtdparts = "spi-nand0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),125440k(ubi)";
 		};
+
+		layout@2 {
+			/* for 256M spi-nand: no NMBM, ubi fills the rest */
+			label = "256m";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),256512k(ubi)";
+		};
+
+		layout@3 {
+			/* for 512M spi-nand: no NMBM, ubi fills the rest */
+			label = "512m";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),518656k(ubi)";
+		};
+
+		layout@4 {
+			/* for 1G spi-nand: no NMBM, ubi fills the rest */
+			label = "1g";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),1042944k(ubi)";
+		};
+
+		layout@lede {
+			/* lede/openwrt layout: ubi spans the rest of the flash */
+			label = "lede";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+		};
+
+		layout@expand {
+			/* ubi fills the whole flash, fits 128M/256M/512M/1G */
+			label = "expand(auto)";
+			mtdids = "spi-nand0=spi-nand0";
+			mtdparts = "spi-nand0:1024k(bl2),512k(u-boot-env),2048k(factory),2048k(fip),-(ubi)";
+		};
 	};
 
 	gpio-leds {
