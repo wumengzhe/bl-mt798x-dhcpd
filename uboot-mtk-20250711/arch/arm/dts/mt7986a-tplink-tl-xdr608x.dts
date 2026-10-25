@@ -62,7 +62,7 @@
 			// ubi fills the whole flash, fits 128M/256M/512M
 			mtdids = "spi-nand0=spi-nand0";
 			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),-(ubi)";
-		}
+		};
 
 		layout@5 {
 			label = "1g";

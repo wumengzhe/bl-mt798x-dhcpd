@@ -52,7 +52,7 @@
 			label = "expand(auto)";
 			mtdids = "spi-nand0=spi-nand0";
 			mtdparts = "spi-nand0:1024k(bl2),256k(config),256k(factory),2048k(reserved),2048k(fip),-(ubi)";
-		}
+		};
 
 		layout@5 {
 			label = "1g";
