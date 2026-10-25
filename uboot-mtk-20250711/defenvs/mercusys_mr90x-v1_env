@@ -26,12 +26,13 @@ bootmenu_7=[31mLoad BL2 preloader via TFTP then write to NAND.[0m=run boot_tft
 bootmenu_8=Reboot.=reset
 bootmenu_9=Reset all settings to factory defaults.=run reset_factory ; reset
 boot_default=run led_boot ; run bootcmd ; run boot_recovery ; replacevol=1 ; run boot_tftp_forever
-boot_production=run led_boot ; run ubi_read_production && bootm $loadaddr#$bootconf
-boot_recovery=run led_boot ; run ubi_read_recovery && bootm $loadaddr#$bootconf
-boot_tftp=run led_boot ; tftpboot $loadaddr $bootfile && bootm $loadaddr#$bootconf
+boot_os=if env exists bootconf ; then bootm $loadaddr#$bootconf || bootm $loadaddr ; else bootm $loadaddr ; fi
+boot_production=run led_boot ; run ubi_read_production && run boot_os
+boot_recovery=run led_boot ; run ubi_read_recovery && run boot_os
+boot_tftp=run led_boot ; tftpboot $loadaddr $bootfile && run boot_os
 boot_tftp_forever=run led_boot ; while true ; do run boot_tftp ; sleep 1 ; done
-boot_tftp_production=run led_boot ; tftpboot $loadaddr $bootfile_upg && test $replacevol = 1 && iminfo $loadaddr && run ubi_write_production ; if test $noboot = 1 ; then else bootm $loadaddr#$bootconf ; fi
-boot_tftp_recovery=run led_boot ; tftpboot $loadaddr $bootfile && test $replacevol = 1 && iminfo $loadaddr && run ubi_write_recovery ; if test $noboot = 1 ; then else bootm $loadaddr#$bootconf ; fi
+boot_tftp_production=run led_boot ; tftpboot $loadaddr $bootfile_upg && test $replacevol = 1 && iminfo $loadaddr && run ubi_write_production ; if test $noboot = 1 ; then else run boot_os ; fi
+boot_tftp_recovery=run led_boot ; tftpboot $loadaddr $bootfile && test $replacevol = 1 && iminfo $loadaddr && run ubi_write_recovery ; if test $noboot = 1 ; then else run boot_os ; fi
 boot_tftp_write_fip=run led_boot ; tftpboot $loadaddr $bootfile_fip && run ubi_write_fip && run reset_factory
 boot_tftp_write_bl2=run led_boot ; tftpboot $loadaddr $bootfile_bl2 && run snand_write_bl2
 check_buttons=if button reset ; then run boot_tftp ; fi
@@ -41,7 +42,7 @@ reset_factory=mw $loadaddr 0xff 0x1f000 ; ubi write $loadaddr ubootenv 0x1f000 ;
 snand_write_bl2=mtd erase bl2 && mtd write bl2 $loadaddr 0x0 0x40000
 ubi_create_env=ubi check ubootenv || ubi create ubootenv 0x1f000 dynamic ; ubi check ubootenv2 || ubi create ubootenv2 0x1f000 dynamic
 ubi_prepare_rootfs=if ubi check rootfs_data ; then else if env exists rootfs_data_max ; then ubi create rootfs_data $rootfs_data_max dynamic || ubi create rootfs_data - dynamic ; else ubi create rootfs_data - dynamic ; fi ; fi
-ubi_read_production=ubi read $loadaddr fit && iminfo $loadaddr && run ubi_prepare_rootfs
+ubi_read_production=if ubi check fit ; then ubi read $loadaddr fit ; else ubi read $loadaddr kernel ; fi ; iminfo $loadaddr && run ubi_prepare_rootfs
 ubi_read_recovery=ubi check recovery && ubi read $loadaddr recovery
 ubi_remove_rootfs=ubi check rootfs_data && ubi remove rootfs_data
 ubi_write_fip=run ubi_remove_rootfs ; ubi check fip && ubi remove fip ; ubi create fip $filesize static && ubi write $loadaddr fip $filesize

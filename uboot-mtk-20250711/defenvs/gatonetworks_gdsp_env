@@ -28,9 +28,9 @@ bootmenu_4=Reset all settings to factory defaults.=run reset_factory ; reset
 bootmenu_5=Reboot.=reset
 boot_first=if button reset ; then run boot_tftp ; setenv flag_recover 1 ; run boot_default ; fi ; bootmenu
 boot_default=if env exists flag_recover ; then else run bootcmd ; fi ; run boot_tftp_forever
-boot_nor=mtd read firmware ${loadaddr} ; bootm $loadaddr#$bootconf
-boot_sd_firmware=setenv bootconf "config-1#mt7981b-gatonetworks-gdsp-sd#mt7981b-gatonetworks-gdsp-sd-boot"; run sdmmc_read_firmware && bootm $loadaddr#$bootconf
-boot_tftp=tftpboot $loadaddr $bootfile && bootm $loadaddr#$bootconf
+boot_nor=mtd read firmware ${loadaddr} ; run boot_os
+boot_sd_firmware=setenv bootconf "config-1#mt7981b-gatonetworks-gdsp-sd#mt7981b-gatonetworks-gdsp-sd-boot"; run sdmmc_read_firmware && run boot_os
+boot_tftp=tftpboot $loadaddr $bootfile && run boot_os
 boot_tftp_forever=while true ; do run boot_tftp ; sleep 1 ; done
 mmc_read_vol=mmc read $loadaddr $part_addr 0x100 && imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc read $loadaddr 0x$part_addr 0x$image_size && setexpr filesize $image_size * 0x200
 mmc_write_vol=imszb $loadaddr image_size && test 0x$image_size -le 0x$part_size && mmc erase 0x$part_addr 0x$image_size && mmc write $loadaddr 0x$part_addr 0x$image_size

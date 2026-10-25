@@ -1736,12 +1736,21 @@ int mtd_upgrade_image(const void *data, size_t size)
 #ifdef CONFIG_CMD_UBI
 	const char *ubi_flash_part = PART_UBI_NAME;
 	struct mtd_info *mtd_kernel;
+	/* Legacy layouts keep an ITB in a raw "fit" MTD partition; when one is
+	 * present it still wins over the UBI "fit" volume below. */
+	struct mtd_info *mtd_fit_raw;
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	struct mtd_info *mtd_ubikernel, *mtd_ubirootfs;
 	const char *ubi_kernel_part;
 	const char *ubi_rootfs_part;
 #endif
 #endif /* CONFIG_CMD_UBI */
+
+#if defined(CONFIG_CMD_UBI) || !defined(CONFIG_MTK_DUAL_BOOT)
+	/* ii.header_type is read even when parse_image_ram() bails out early,
+	 * so start from a known state instead of an uninitialised struct. */
+	memset(&ii, 0, sizeof(ii));
+#endif
 
 	gen_mtd_probe_devices();
 
@@ -1751,6 +1760,12 @@ int mtd_upgrade_image(const void *data, size_t size)
 		put_mtd_device(mtd_kernel);
 	else
 		mtd_kernel = NULL;
+
+	mtd_fit_raw = get_mtd_device_nm(PART_FIT_NAME);
+	if (!IS_ERR_OR_NULL(mtd_fit_raw))
+		put_mtd_device(mtd_fit_raw);
+	else
+		mtd_fit_raw = NULL;
 
 #ifdef CONFIG_MEDIATEK_MULTI_MTD_LAYOUT
 	ubi_flash_part = env_get("factory_part");
@@ -1773,6 +1788,15 @@ int mtd_upgrade_image(const void *data, size_t size)
 			if (!ret && ii.type == IMAGE_TAR)
 				return write_ubi1_tar_image(data, size,
 							    mtd_kernel, mtd);
+
+			/* Accept .itb uploads on layouts that expose a "kernel"
+			 * MTD partition as well: previously an ITB fell through
+			 * to the raw "fit" partition write below and failed with
+			 * -ENOTSUPP whenever that partition did not exist, so a
+			 * single bootloader could not take both .bin and .itb.
+			 * A legacy raw "fit" partition still takes precedence. */
+			if (ii.header_type == HEADER_FIT && !mtd_fit_raw)
+				return write_ubi_itb_image(data, size, mtd);
 		} else {
 			ret = parse_image_ram(data, size, mtd->erasesize, &ii);
 
