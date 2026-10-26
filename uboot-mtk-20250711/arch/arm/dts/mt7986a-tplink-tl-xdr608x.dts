@@ -40,6 +40,8 @@
 
 			label = "openwrt";
 
+			mtdids = "spi-nand0=spi-nand0";
+
 			mtdparts = "spi-nand0:1024k(bl2),384k(config),640k(factory),1024k(reserved),512k(u-boot-env),2048k(fip),-(ubi)";
 		};
 

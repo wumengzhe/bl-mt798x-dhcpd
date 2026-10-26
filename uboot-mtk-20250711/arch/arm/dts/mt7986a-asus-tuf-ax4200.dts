@@ -36,6 +36,8 @@
 
 			label = "openwrt";
 
+			mtdids = "nmbm0=nmbm0";
+
 			mtdparts = "nmbm0:4096k(bootloader),-(ubi)";
 		};
 
