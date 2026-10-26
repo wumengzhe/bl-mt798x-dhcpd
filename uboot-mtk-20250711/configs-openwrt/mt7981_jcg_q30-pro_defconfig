@@ -100,16 +100,19 @@ CONFIG_DM_MTD=y
 CONFIG_MTD_SPI_NAND=y
 CONFIG_MTD_UBI_FASTMAP=y
 # 分区表：与 DTS mediatek/openwrt/mt7981_jcg_q30-pro.dts 的 fixed-partitions
-# 逐项对齐（bl2 1M / orig-env 512K / factory 2M / fip 2M / ubi 占满剩余）。
+# 逐项对齐（bl2 0x0/1M、orig-env 0x100000/512K、factory 0x180000/2M、
+# fip 0x380000/2M、ubi 0x580000/0x7000000）。
 # DTS 的 DM fixed-partitions 不会注册进 mtd_table，而 mtd write/erase 与
 # boot_from_ubi() 的分区查找都只认 env mtdparts，故必须在此提供同一份表，
 # 否则 "mtd write fip" 找不到分区、UBI 引导也定位不到 ubi 分区。
+# 大小必须与 DTS 逐字节一致（不可用 -(ubi)）：mtd_table 与 DM 分区表
+# 若对 ubi 大小认定不同，会出现两套分区视图互相打架。
 # 分区名大小写敏感（mtdcore.c 用 strcmp 匹配 mtd->name），须与
 # defenvs/jcg_q30-pro_env 里实际使用的 bl2 / factory / fip / ubi 完全一致。
 # 本板非 NMBM，故用 spi-nand0（default 变体用的是 nmbm0）。
 CONFIG_CMD_MTDPARTS=y
 CONFIG_MTDIDS_DEFAULT="spi-nand0=spi-nand0"
-CONFIG_MTDPARTS_DEFAULT="spi-nand0:1024k(bl2),512k(orig-env),2048k(factory),2048k(fip),-(ubi)"
+CONFIG_MTDPARTS_DEFAULT="spi-nand0:1024k(bl2),512k(orig-env),2048k(factory),2048k(fip),0x7000000(ubi)"
 CONFIG_MTK_UBI_SUPPORT=y
 CONFIG_MTK_UPGRADE_BL2_VERIFY=y
 CONFIG_PHY_FIXED=y
