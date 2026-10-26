@@ -1446,13 +1446,22 @@ static int boot_from_ubi(struct mtd_info *mtd, bool do_boot)
 	if (ret)
 		return ret;
 
-	if (strcmp(CONFIG_MTK_DEFAULT_FIT_BOOT_CONF, "")) {
-		volname_primary = PART_FIT_NAME;
-		volname_secondary = PART_KERNEL_NAME;
-	} else {
-		volname_primary = PART_KERNEL_NAME;
-		volname_secondary = PART_FIT_NAME;
-	}
+	/*
+	 * Always read the kernel volume first, fit as fallback.
+	 *
+	 * Every path that (re)creates the kernel volume deletes the old one
+	 * first (U-Boot: write_ubi2_tar_image removes fit; firmware-side:
+	 * nand_upgrade_prepare_ubi ubirmvols kernel/rootfs), and every path
+	 * that creates the fit volume removes kernel first (write_ubi_itb_image
+	 * and the env TFTP path). Firmware-side upgrades never delete the fit
+	 * volume, hence:  kernel volume exists  =>  it is newer than fit.
+	 * The old CONFIG_MTK_DEFAULT_FIT_BOOT_CONF-driven fit-first order would
+	 * boot a stale ITB after a firmware-side upgrade left the old fit
+	 * volume behind. (Its string value is never used anywhere; FIT config
+	 * selection is done via the $bootconf env / bootm '#' suffix.)
+	 */
+	volname_primary = PART_KERNEL_NAME;
+	volname_secondary = PART_FIT_NAME;
 
 	ret = read_ubi_volume(volname_primary, (void *)data_load_addr, 0);
 	if (ret) {

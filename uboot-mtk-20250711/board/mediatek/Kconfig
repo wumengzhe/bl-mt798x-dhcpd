@@ -307,6 +307,14 @@ config MTK_DEFAULT_FIT_BOOT_CONF
 	  FIT image to be used on multiple boards.
 	  If left empty, the default one specified in FIT will be used.
 
+	  NOTE: since the dual-format (ITB/tar) upgrade support, the boot
+	  volume/partition priority no longer depends on this option: the
+	  kernel volume (NAND) or partition (eMMC) is always tried first,
+	  with fit/production as fallback. This keeps "last written wins"
+	  semantics: firmware-side upgrades only rewrite kernel/rootfs, and
+	  U-Boot ITB flashing erases the kernel slot. The string value of
+	  this option is currently unused; leave it empty for new boards.
+
 config MTK_ROOTDISK_OVERRIDE
 	string "Override default rootdisk configuration for OpenWrt"
 	default ""

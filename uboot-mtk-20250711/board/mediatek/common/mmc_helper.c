@@ -1229,16 +1229,30 @@ int mmc_boot_image(u32 dev, bool do_boot)
 	if (IS_ENABLED(CONFIG_MTK_DUAL_BOOT))
 		return mmc_dual_boot(dev, do_boot);
 
-	if (strcmp(CONFIG_MTK_DEFAULT_FIT_BOOT_CONF, "")) {
-		part_primary = PART_PRODUCTION_NAME;
-		part_secondary = PART_KERNEL_NAME;
-	} else {
-		part_primary = PART_KERNEL_NAME;
-		part_secondary = PART_PRODUCTION_NAME;
-	}
+	/*
+	 * Always boot the kernel partition first, production (FIT) as fallback.
+	 *
+	 * Firmware-side upgrades (emmc_do_upgrade) only (re)write kernel/rootfs
+	 * and never touch production, while U-Boot ITB flashing erases the
+	 * kernel partition head before writing production (see
+	 * mmc_upgrade_image_itb). Hence:  kernel partition holds a valid image
+	 * =>  it is newer than production.  The old
+	 * CONFIG_MTK_DEFAULT_FIT_BOOT_CONF-driven production-first order would
+	 * boot a stale ITB after a firmware-side upgrade. (Its string value is
+	 * never used anywhere; FIT config selection is done via $bootconf.)
+	 */
+	part_primary = PART_KERNEL_NAME;
+	part_secondary = PART_PRODUCTION_NAME;
 
 	ret = boot_from_mmc_partition(dev, 0, part_primary, do_boot);
-	if (ret == -ENODEV)
+	/*
+	 * Fall back to the secondary slot only when the primary holds no
+	 * valid image (-ENOENT, e.g. its head was erased by ITB flashing) or
+	 * the partition is missing (-ENODEV). A primary that exists but fails
+	 * later (e.g. in boot_from_mem) must NOT retry the stale secondary,
+	 * otherwise a flashed-but-failing image drops back to the old one.
+	 */
+	if (ret == -ENODEV || ret == -ENOENT)
 		ret = boot_from_mmc_partition(dev, 0, part_secondary, do_boot);
 
 	return ret;
@@ -1353,6 +1367,15 @@ static int mmc_upgrade_image_itb(u32 dev, const void *data, size_t size,
 			do_dual_boot_post = true;
 		} else {
 			part = PART_PRODUCTION_NAME;
+			/*
+			 * Invalidate any stale kernel partition (head erase is
+			 * enough for _boot_from_mmc() to return -ENOENT and
+			 * fall back) so that kernel-first boot in
+			 * mmc_boot_image() always picks the newest image.
+			 * Mirrors write_ubi_itb_image() on NAND, which removes
+			 * the kernel/rootfs volumes before writing fit.
+			 */
+			mmc_erase_part(dev, 0, PART_KERNEL_NAME, 0, SZ_1M);
 		}
 	}
 
