@@ -1350,6 +1350,21 @@ static int mmc_dual_boot_post_upgrade(u32 dev, u32 slot)
 	return 0;
 }
 
+static bool mmc_part_exists(u32 dev, int hwpart, const char *part_name)
+{
+	struct disk_partition dpart;
+	struct mmc *mmc;
+
+	mmc = _mmc_get_dev(dev, hwpart, false);
+	if (!mmc)
+		return false;
+
+	if (_mmc_find_part(mmc, part_name, &dpart, false))
+		return false;
+
+	return dpart.size != 0;
+}
+
 static int mmc_upgrade_image_itb(u32 dev, const void *data, size_t size,
 				 const char *part)
 {
@@ -1365,7 +1380,7 @@ static int mmc_upgrade_image_itb(u32 dev, const void *data, size_t size,
 			part = dual_boot_slots[slot].kernel;
 
 			do_dual_boot_post = true;
-		} else {
+		} else if (mmc_part_exists(dev, 0, PART_PRODUCTION_NAME)) {
 			part = PART_PRODUCTION_NAME;
 			/*
 			 * Invalidate any stale kernel partition (head erase is
@@ -1376,6 +1391,16 @@ static int mmc_upgrade_image_itb(u32 dev, const void *data, size_t size,
 			 * the kernel/rootfs volumes before writing fit.
 			 */
 			mmc_erase_part(dev, 0, PART_KERNEL_NAME, 0, SZ_1M);
+		} else {
+			/*
+			 * kernel/rootfs GPT (our gpt-*.bin, same layout the
+			 * OpenWrt/lede sysupgrade writes: CI_KERNPART=kernel /
+			 * CI_ROOTPART=rootfs): there is no production
+			 * partition, so the ITB goes into the kernel slot --
+			 * which is also the primary boot slot, so no erase of
+			 * the opposite slot is needed.
+			 */
+			part = PART_KERNEL_NAME;
 		}
 	}
 
