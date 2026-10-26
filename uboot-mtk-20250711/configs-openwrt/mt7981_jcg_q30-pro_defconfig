@@ -70,6 +70,9 @@ CONFIG_ENV_REDUNDANT=y
 CONFIG_ENV_UBI_PART="ubi"
 CONFIG_ENV_UBI_VOLUME="ubootenv"
 CONFIG_ENV_UBI_VOLUME_REDUND="ubootenv2"
+# 首次启动时 ubootenv/ubootenv2 卷尚不存在，需允许自动创建，
+# 否则 env_save 失败（与 configs-fit/mt7981_jcg_q30-pro_defconfig 一致）
+CONFIG_ENV_UBI_VOLUME_CREATE=y
 CONFIG_ENV_RELOC_GD_ENV_ADDR=y
 CONFIG_ENV_USE_DEFAULT_ENV_TEXT_FILE=y
 CONFIG_ENV_DEFAULT_ENV_TEXT_FILE="defenvs/jcg_q30-pro_env"
@@ -96,6 +99,19 @@ CONFIG_MTD=y
 CONFIG_DM_MTD=y
 CONFIG_MTD_SPI_NAND=y
 CONFIG_MTD_UBI_FASTMAP=y
+# 分区表：与 DTS mediatek/openwrt/mt7981_jcg_q30-pro.dts 的 fixed-partitions
+# 逐项对齐（bl2 1M / orig-env 512K / factory 2M / fip 2M / ubi 占满剩余）。
+# DTS 的 DM fixed-partitions 不会注册进 mtd_table，而 mtd write/erase 与
+# boot_from_ubi() 的分区查找都只认 env mtdparts，故必须在此提供同一份表，
+# 否则 "mtd write fip" 找不到分区、UBI 引导也定位不到 ubi 分区。
+# 分区名大小写敏感（mtdcore.c 用 strcmp 匹配 mtd->name），须与
+# defenvs/jcg_q30-pro_env 里实际使用的 bl2 / factory / fip / ubi 完全一致。
+# 本板非 NMBM，故用 spi-nand0（default 变体用的是 nmbm0）。
+CONFIG_CMD_MTDPARTS=y
+CONFIG_MTDIDS_DEFAULT="spi-nand0=spi-nand0"
+CONFIG_MTDPARTS_DEFAULT="spi-nand0:1024k(bl2),512k(orig-env),2048k(factory),2048k(fip),-(ubi)"
+CONFIG_MTK_UBI_SUPPORT=y
+CONFIG_MTK_UPGRADE_BL2_VERIFY=y
 CONFIG_PHY_FIXED=y
 CONFIG_MEDIATEK_ETH=y
 CONFIG_PCIE_MEDIATEK=y
