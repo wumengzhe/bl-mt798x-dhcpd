@@ -222,6 +222,32 @@ Then run:
 make gpt DRAW=1
 ```
 
+### eMMC GPT 注意事项（FIP 容量 / 刷写 / 分区名兼容）
+
+> 本小节为设备级经验沉淀，避免误用。即便外部参考包被删除，以下事实仍适用。
+
+1. **`_2m` / `_4m` 是 GPT 给 FIP 预留的「分区容量」档位，不是 fip 文件大小。**
+   fip 二进制实测约 200–750 KB，远小于任一档位。两档区别仅在于 FIP 分区在盘上占 2 MiB 还是 4 MiB。
+
+2. **rax3000m-emmc 推荐用 `_4m`（4 MiB FIP），与社区「大分区」布局一致。**
+   社区 U-Boot（恩山 `right.com.cn/forum/thread-8400306`，ImmortalWrt TF-A v2.9 / 2023-07-24 构建，目标「支持主线 ITB + 大分区」）实测 GPT 中 `fip` 分区为 **4 MiB**（LBA 13312–21503）。其刷写教程中的关键一步：
+   ```bash
+   dd if=/dev/zero of=/dev/mmcblk0 bs=512 seek=13312 count=8192 conv=fsync   # 清零 4 MiB
+   dd if=mt7981-...-fip.bin   of=/dev/mmcblk0 bs=512 seek=13312 conv=fsync   # fip 从 0x680000 写入
+   ```
+   该 `count=8192`（4 MiB）清零**仅兼容 4 MiB FIP 的 GPT**。若改用本仓库 `_2m`（2 MiB FIP）的 GPT，必须把清零步改为 `count=4096`，否则会越过 fip 区误伤下一个分区（kernel/rootfs）。
+
+3. **分区名不互通，GPT 与 U-Boot 必须同源配套，禁止混用。**
+   - 本仓库 GPT 分区名：`u-boot-env` / `factory` / `fip` / `kernel` / `rootfs`（eMMC 引导按 `kernel` / `production` / `fit` 名查找）。
+   - 社区「大分区」GPT 分区名：`ubootenv` / `factory` / `fip` / `recovery` / `production`（无 `kernel`，且有 32 MiB `recovery`）。
+   两套命名与结构都对不上，**不要用社区 GPT 配本仓库 U-Boot，也不要用本仓库 GPT 配社区 U-Boot**，否则引导找不到分区。
+
+4. **数据区多档（`_2G` / `_4G` 等后缀）是 resize 用户数据/overlay 区，与社区 2G/5G/10G/20G/55G 思路一致。**
+   不带后缀的 base 档是「整盘用」（依赖 64G eMMC，rootfs 终点 ≈ LBA 120831966）；带 `_2G`/`_4G` 则把数据区限制在对应大小。
+
+5. **社区参考包定位：外部验证基线，不是可用产物。**
+   它是 2023 年老构建（TF-A v2.9），与本项目 2025 线不同源；其价值在于「同设备 U-Boot 同时支持 ITB + 大分区、总是启动最新」被社区实证，以及提供了真实的 `dd` 刷写流程参照。**不要将其二进制并进本项目构建管线，也不要用它替换本仓库 U-Boot。**
+
 ## Compile ATF
 
 ```bash
