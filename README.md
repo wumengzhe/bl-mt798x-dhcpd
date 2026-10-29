@@ -176,25 +176,30 @@ You need to fork this repository to your own account, and then you can use Actio
 >
 > This branch only keeps 2025/SP1/SP2 support.
 
-## Generate GPT with python2.7
+## Generate GPT
 
-> install dependencies
+> install dependencies（本仓库顶层 `generate_gpt.sh` 调用 MediaTek 上游 `mtk_gpt.py`，为 python2.7 版，
+> 故本地生成需先装 python2.7）
 
 ```bash
 sudo apt-get install python2 python2-dev
 ```
 
+> **CI 一致性提示**：实际发布构建（`wmz_owner_uboot`）用的是 `gpt_tools/gen_gpt.sh` —— 它是 python3 端口，
+> 且产出的 bin **不带** `-Yuzhii_md5-<hash>` 后缀（即 `gpt-<name>.bin`，与本仓库 release 一致）。
+> 本地若想完全复刻 CI 产物，请改用该 python3 脚本；本脚本产物名会带 md5 后缀，仅作本地预览。
+
 > run
 
 ```bash
-make gpt
+./generate_gpt.sh
 ```
 
 Generated files will be in the `output_gpt`
 
 > You need to add your device's partition info JSON file in the "mt798x_gpt" directory, e.g. "atf-dir/tools/dev/gpt_editor/example/gpt.json".
 
-When you enable `SDMMC=1` (e.g. `make gpt SDMMC=1`), the generated GPT image will support MTK SDMMC.
+When you enable `SDMMC=1` (e.g. `./generate_gpt.sh SDMMC=1`), the generated GPT image will support MTK SDMMC.
 
 ### Show GPT info
 
@@ -203,7 +208,7 @@ Create a directory named `mt798x_gpt_bin` in the repository root directory, and 
 Then run:
 
 ```bash
-make gpt SHOW=1
+./generate_gpt.sh SHOW=1
 ```
 
 Then it will display the GPT partition info of all GPT bin files in `mt798x_gpt_bin` directory, and output the results to `gpt_info.txt` in the `output_gpt` directory.
@@ -219,7 +224,7 @@ pip3 install Pillow
 Then run:
 
 ```bash
-make gpt DRAW=1
+./generate_gpt.sh DRAW=1
 ```
 
 ### eMMC GPT 注意事项（FIP 容量 / 刷写 / 分区名兼容）

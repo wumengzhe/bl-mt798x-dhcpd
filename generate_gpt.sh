@@ -229,7 +229,7 @@ run_generate_mode() {
 			built_base=$(basename -- "${built_out_file_raw}")
 			built_name_no_extension="${built_base%.*}"
 			built_extension="${built_base##*.}"
-			built_out_file="${OUTPUT_FOLDER}/${built_name_no_extension}-${AUTHOR}_md5-${gpt_md5}.${built_extension}"
+			built_out_file="${output_file}"
 			mv -f "${built_out_file_raw}" "${built_out_file}"
 			info "Built: ${built_out_file}"
 			info "Size: $(stat -c%s "${built_out_file}") bytes"

@@ -39,7 +39,6 @@ boot_tftp_recovery=tftpboot $loadaddr $bootfile && env exists replacevol && imin
 boot_tftp=tftpboot $loadaddr $bootfile && run boot_os
 boot_tftp_write_fip=tftpboot $loadaddr $bootfile_fip && run mtd_write_fip && run reset_factory
 boot_tftp_write_bl2=tftpboot $loadaddr $bootfile_bl2 && run mtd_write_bl2
-part_default=production
 part_recovery=recovery
 reset_factory=ubi part ubi ; mw $loadaddr 0x0 0x800 ; ubi write $loadaddr ubootenv 0x800 ; ubi write $loadaddr ubootenv2 0x800
 mtd_write_fip=mtd erase fip && mtd write fip $loadaddr
