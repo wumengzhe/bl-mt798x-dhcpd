@@ -44,6 +44,12 @@ mtd_write_bl2=mtd erase bl2 && mtd write bl2 $loadaddr
 ubi_create_env=ubi check ubootenv || ubi create ubootenv 0x100000 dynamic ; ubi check ubootenv2 || ubi create ubootenv2 0x100000 dynamic
 ubi_format=ubi detach ; mtd erase ubi && ubi part ubi ; reset
 ubi_prepare_rootfs=if ubi check rootfs_data ; then else if env exists rootfs_data_max ; then ubi create rootfs_data $rootfs_data_max dynamic || ubi create rootfs_data - dynamic ; else ubi create rootfs_data - dynamic ; fi ; fi
+
+# ubi_read_production / ubi_write_production names are inherited from upstream
+# (originally read/write the 'production' UBI volume). In this repo they are
+# reworked: read = prefer 'kernel' volume, fall back to 'fit'; write = remove
+# fit/kernel/rootfs first, then create 'fit'. NOT related to the eMMC 'production'
+# partition. The historical names are kept for compatibility with docs/scripts.
 ubi_read_production=if ubi check kernel ; then ubi read $loadaddr kernel ; else ubi read $loadaddr $part_fit ; fi ; iminfo $loadaddr && run ubi_prepare_rootfs
 ubi_read_recovery=ubi check recovery && ubi read $loadaddr recovery
 ubi_remove_rootfs=ubi check rootfs_data && ubi remove rootfs_data
