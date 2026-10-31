@@ -26,6 +26,8 @@ config MTK_BOOTMENU_MMC_COMMON
 	select MMC
 	select MMC_WRITE
 	select MMC_HW_PARTITIONING
+	select EFI_PARTITION
+	select DOS_PARTITION
 
 config MTK_BOOTMENU_DEFAULT
 	bool "Use default bootmenu"
